@@ -268,6 +268,11 @@ void give_items_skills(const newgame_def& ng)
         you.religion = GOD_IGNIS;
         you.piety = 150;
         break;
+    
+    case JOB_GRAVE_KNIGHT:
+        you.religion = GOD_YREDELEMNUL;
+        you.piety = 15;
+        break;
 
     default:
         break;

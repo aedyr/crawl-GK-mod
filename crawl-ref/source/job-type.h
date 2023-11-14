@@ -45,6 +45,7 @@ enum job_type
     JOB_DELVER,
     JOB_CINDER_ACOLYTE,
     JOB_REAVER,
+    JOB_GRAVE_KNIGHT,                  // Willett custom 
     NUM_JOBS,                          // always after the last job
 
     JOB_UNKNOWN = 100,

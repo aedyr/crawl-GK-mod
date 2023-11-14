@@ -399,6 +399,18 @@ static const map<job_type, job_def> job_data =
     { { SK_DODGING, 2 }, { SK_STEALTH, 2 }, { SK_SPELLCASTING, 3 },
       { SK_TRANSLOCATIONS, 1 }, { SK_CONJURATIONS, 1 }, { SK_SUMMONINGS, 1 }, },
 } },
+
+{ JOB_GRAVE_KNIGHT, {
+    "GK", "Grave Knight",
+    6, 2, 4,
+    { SP_GHOUL, SP_HILL_ORC, SP_MERFOLK, SP_VAMPIRE, SP_GARGOYLE, },
+    { },
+    { "ring mail", "buckler" },
+    WCHOICE_PLAIN,
+    { { SK_FIGHTING, 3 }, { SK_SHIELDS, 2 }, { SK_ARMOUR, 2 },
+      { SK_WEAPON, 2 }, { SK_INVOCATIONS, 2 }, },
+} },
+
 #if TAG_MAJOR_VERSION == 34
 { JOB_ABYSSAL_KNIGHT, {
     "AK", "Abyssal Knight",

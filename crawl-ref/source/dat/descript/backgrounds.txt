@@ -62,6 +62,11 @@ Gladiator
 Gladiators are ready for the arena with light armour, a weapon of their choice,
 and a few throwing weapons and nets.
 %%%%
+Grave Knight
+
+Grave Knights are tireless warriors in Yredelemnul's unholy crusade. They
+fight alongside the undead remains of their victims.
+%%%%
 Hedge Wizard
 
 Hedge Wizards learn many minor magics, letting them backstab or escape their
