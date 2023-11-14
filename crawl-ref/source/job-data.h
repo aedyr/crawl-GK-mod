@@ -403,7 +403,7 @@ static const map<job_type, job_def> job_data =
 { JOB_GRAVE_KNIGHT, {
     "GK", "Grave Knight",
     6, 2, 4,
-    { SP_GHOUL, SP_HILL_ORC, SP_MERFOLK, SP_VAMPIRE, SP_GARGOYLE, },
+    { SP_GHOUL, SP_HILL_ORC, SP_MERFOLK, SP_HUMAN, SP_GARGOYLE, },
     { },
     { "ring mail", "buckler" },
     WCHOICE_PLAIN,

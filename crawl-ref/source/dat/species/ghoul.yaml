@@ -59,5 +59,6 @@ recommended_jobs:
   - JOB_NECROMANCER
   - JOB_ICE_ELEMENTALIST
   - JOB_EARTH_ELEMENTALIST
+  - JOB_GRAVE_KNIGHT
 recommended_weapons:
   - SK_UNARMED_COMBAT

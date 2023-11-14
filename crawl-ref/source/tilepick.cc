@@ -4007,6 +4007,8 @@ static tileidx_t _tileidx_player_job_base(const job_type job)
             return TILEG_JOB_REAVER;
         case JOB_CINDER_ACOLYTE:
             return TILEG_JOB_CINDER_ACOLYTE;
+        case JOB_GRAVE_KNIGHT:
+            return TILEG_JOB_GRAVE_KNIGHT;
         default:
             return TILEG_ERROR;
     }

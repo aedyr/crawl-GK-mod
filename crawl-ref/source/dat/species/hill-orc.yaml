@@ -43,6 +43,7 @@ recommended_jobs:
   - JOB_CINDER_ACOLYTE
   - JOB_REAVER
   - JOB_FIRE_ELEMENTALIST
+  - JOB_GRAVE_KNIGHT
 recommended_weapons:
   - SK_MACES_FLAILS
   - SK_AXES
