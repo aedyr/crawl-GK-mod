@@ -325,21 +325,6 @@ LUAFN(view_in_known_map_bounds)
     return 1;
 }
 
-/**
- * @brief Are the given coordinates in the minimal bounding box of the known
- * map?
- * @tparam int x
- * @tparam int y
- * @treturn boolean
- * @function in_known_map_bounds
- */
-LUAFN(view_in_known_map_bounds)
-{
-    PLAYERCOORDS(p, 1, 2)
-    PLUARET(boolean, in_known_map_bounds(p));
-    return 1;
-}
-
 LUAFN(view_update_monsters)
 {
     ASSERT_DLUA;
