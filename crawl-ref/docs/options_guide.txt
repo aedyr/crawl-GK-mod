@@ -32,9 +32,9 @@ The contents of this text are:
                 detected_monster_colour, detected_item_colour,
                 remembered_monster_colour
 3-c     Dungeon View Item and Monster Highlighting.
-                friend_highlight, neutral_highlight, stab_highlight,
-                may_stab_highlight, heap_highlight, feature_item_highlight,
-                trap_item_highlight
+                friend_highlight, neutral_highlight, unusual_highlight,
+                stab_highlight, may_stab_highlight, heap_highlight,
+                feature_item_highlight, trap_item_highlight
 3-d     Level Map Functions.
                 level_map_cursor_step
 3-e     Viewport Display Options.
@@ -75,10 +75,11 @@ The contents of this text are:
                 msg_min_height, msg_max_height, msg_webtiles_height,
                 messages_at_top, msg_condense_repeats, msg_condense_short,
                 show_travel_trail, skill_focus, default_show_all_skills,
-                monster_list_colour, view_delay, use_animations,
-                darken_beyond_range, show_blood, force_more_message,
-                flash_screen_message, cloud_status, always_show_zot,
-                action_panel, action_panel_filter,
+                monster_list_colour, view_delay, reduce_animations,
+                use_animations, unusual_monster_items, darken_beyond_range,
+                show_blood, force_more_message, flash_screen_message,
+                cloud_status, always_show_zot, always_show_gems,
+                more_gem_info, action_panel, action_panel_filter,
                 action_panel_show_unidentified, action_panel_scale,
                 action_panel_orientation, action_panel_font_family,
                 action_panel_font_size
@@ -115,19 +116,20 @@ The contents of this text are:
                 tile_excl_centre_col, tile_window_col, tile_update_rate,
                 tile_runrest_rate, tile_key_repeat_delay, tile_tooltip_ms,
                 tile_tag_pref, tile_window_width, tile_window_height,
+                tile_window_ratio, tile_window_limit_size, game_scale,
                 tile_map_pixels, tile_viewport_scale, tile_map_scale,
                 tile_cell_pixels, tile_sidebar_pixels, tile_filter_scaling,
                 tile_force_overlay, tile_overlay_col,
                 tile_overlay_alpha_percent, tile_full_screen,
-                tile_font_crt_file, tile_font_stat_file, tile_font_msg_file,
-                tile_font_tip_file, tile_font_lbl_file, tile_font_crt_family,
-                tile_font_stat_family, tile_font_msg_family,
-                tile_font_lbl_family, tile_font_crt_size, tile_font_stat_size,
-                tile_font_msg_size, tile_font_tip_size, tile_font_lbl_size,
-                tile_font_ft_light, glyph_mode_font, glyph_mode_font_size,
-                tile_show_minihealthbar, tile_show_minimagicbar,
-                tile_show_demon_tier, tile_water_anim, tile_misc_anim,
-                tile_realtime_anim, tile_show_player_species,
+                tile_use_small_layout, tile_font_crt_file, tile_font_stat_file,
+                tile_font_msg_file, tile_font_tip_file, tile_font_lbl_file,
+                tile_font_crt_family, tile_font_stat_family,
+                tile_font_msg_family, tile_font_lbl_family, tile_font_crt_size,
+                tile_font_stat_size, tile_font_msg_size, tile_font_tip_size,
+                tile_font_lbl_size, tile_font_ft_light, glyph_mode_font,
+                glyph_mode_font_size, tile_show_minihealthbar,
+                tile_show_minimagicbar, tile_show_demon_tier, tile_water_anim,
+                tile_misc_anim, tile_realtime_anim, tile_show_player_species,
                 tile_show_threat_levels, tile_layout_priority,
                 tile_display_mode, tile_level_map_hide_messages,
                 tile_level_map_hide_sidebar, tile_player_tile,
@@ -153,15 +155,17 @@ The contents of this text are:
                 use_modifier_prefix_keys, language, fake_lang, messaging
                 read_persist_options
 
-5-b     DOS and Windows.
+5-b     Windows.
                 dos_use_background_intensity
 5-c     Unix.
                 blink_brightens_background, bold_brightens_foreground,
                 best_effort_brighten_background,
                 best_effort_brighten_foreground, allow_extended_colours,
-                background_colour, foreground_colour, use_fake_cursor
+                background_colour, foreground_colour,
+                use_default_terminal_colours, use_fake_cursor
 
 6-  Lua.
+                lua_max_memory
 6-a     Including lua files.
 6-b     Executing inline lua.
 6-c     Conditional options.
@@ -354,10 +358,11 @@ name = Delilah
 
 type = normal
         Choose a game type. Valid values are "normal", "seeded", "tutorial",
-        "arena", "sprint", and "hints". If explicitly set (not just left to
-        the default), this sets the default game type at the main menu. If
-        the main menu is bypassed (e.g. by setting `name`), this option can
-        be used to determine the game type.
+        "arena", "sprint", "descent", and "hints". If explicitly set (not just
+        left to the default), this sets the default game type at the main menu.
+        If the main menu is bypassed (e.g. by setting `name`), this option can
+        be used to determine the game type. "descent" is only valid in alpha
+        (development) builds.
 
 remember_name = true
         Crawl remembers the options (species, background etc.) you used
@@ -567,7 +572,7 @@ one_SDL_sound_channel = false
 3-a     Picking up and Dropping.
 --------------------------------
 
-autopickup = $?!+"/
+autopickup = $?!+"/♦
         The above is the default list. The valid symbols are
         )       Weapons
         (       Missiles
@@ -581,6 +586,7 @@ autopickup = $?!+"/
         0       Orbs
         }       Misc. items
         $       Gold
+        ♦       Gems
         Note that _whether_ items are picked up automatically or not, is
         controlled by the in-game toggle Ctrl-A. Also note that picking
         up takes a turn, but only one turn (regardless of the number of
@@ -702,7 +708,7 @@ everywhere; it depends on OS and terminal):
    highlight:colour -- set background colour of highlighted monsters to
                        "colour"
 The last can be abbreviated to hi:colour.
-See part DOS and Windows (5-b) for dos_use_background_intensity.
+See part Windows (5-b) for dos_use_background_intensity.
 
 Previously these options were named `..._brand`, and the old names are
 available for backwards-compatibility.
@@ -717,6 +723,15 @@ neutral_highlight = hi:lightgrey
         a neutral monster's path, and to avoid accidentally killing it.
         The default setting shows neutrals with a dark grey background. Since
         there are no darkgrey monster glyphs anymore, this works fine.
+
+unusual_highlight = hi:magenta
+        Highlight hostile monsters carrying unusual items. Useful to show if a
+        monster should be handled with care because it has an atypical item,
+        such as a wand or a distortion weapon.
+
+        This is used in conjunction with the unusual_monster_items option:
+        unusual_monster_items determines which items will cause a monster to be
+        highlighted.
 
 stab_highlight = hi:blue
         This option highlights monsters that are fully unaware of the player
@@ -756,7 +771,7 @@ level_map_cursor_step = 7
 The viewport is the portion of the map that is displayed during normal
 play. The viewport is 33x17 by default, but if you use larger terminal
 sizes, you can set these options to make the game show a larger
-viewport. (These options are not fully available on DOS.)
+viewport.
 
 None of these options affects gameplay. In particular, your character's
 line-of-sight is unaffected by these options.
@@ -1077,7 +1092,7 @@ rest_wait_percent = 100
 
 explore_auto_rest = true
         If true, auto-explore waits until your HP and MP are both at
-        rest_wait_percent before moving. This is always disabled for Meteorans.
+        rest_wait_percent before moving.
 
 auto_exclude += <monster name>, <monster name>, ...
         (List option)
@@ -1171,6 +1186,11 @@ allow_self_target = prompt
         you will be required to confirm self-targeting. This option has no
         effect on area-effect spells, such as Mephitic Cloud, where you are
         always a valid target.
+
+prompt_menu = true (tiles default), false (console default)
+        Always show prompt menus as popups if possible, rather than in the
+        message pane. This currently applies to Y/N prompts, and to the `G`o
+        menu.
 
 ability_menu = true
         Always show the full-screen 'a'bility menu. If false, 'a' prompts
@@ -1677,7 +1697,7 @@ default_show_all_skills = false
 
 monster_list_colour = friendly:green, neutral:brown, good_neutral:brown
 monster_list_colour += trivial:darkgrey, easy:lightgrey, tough:yellow,
-                       nasty:lightred
+                       nasty:lightred, unusual:lightmagenta
         (List option)
         Change the colours used to display monster names in the monster list.
         Valid keys, and their initial colours, are:
@@ -1692,6 +1712,7 @@ monster_list_colour += trivial:darkgrey, easy:lightgrey, tough:yellow,
              easy           - lightgrey
              tough          - yellow
              nasty          - lightred
+             unusual        - lightmagenta
 
         If a category is unset or has a missing colour, its colour defaults to
         lightgrey. For removal with `-=`, the category name can be used alone,
@@ -1735,6 +1756,21 @@ use_animations += branch_entry
           branch_entry     - Animations that run when you enter a new branch.
                              Currently only the Abyss and Zot have animations.
 
+unusual_monster_items += <regex>, <regex>, ...
+        (List option)
+        Monsters whose inventory items match a regex in this comma-separated
+        list will display with unusual threat level. E.g.
+            unusual_monster_items =  wand
+            unusual_monster_items += disto,chaos
+            unusual_monster_items += curare,atropa,datura,dispersal
+            unusual_monster_items += throwing net
+        The item descriptions matched against are the short item names that
+        ordinarily display when a monster is examined with 'xv'.
+
+        This option determines which monsters will be regarded as "unusual" for
+        the options tile_show_threat_levels (tiles only), monster_list_colour,
+        and unusual_highlight (console only).
+
 darken_beyond_range = true
         If set to true, everything beyond range when targeting will be
         coloured grey. Setting this to false will also disable the "range"
@@ -1768,6 +1804,13 @@ cloud_status = true
 always_show_zot = false
         Whether to show the "Zot" status light at all times, even when you've
         got plenty of time left.
+
+always_show_gems = false
+        Whether to show the "Gem" status light, indicating how long until the
+        gem in the current branch shatters (if applicable).
+
+more_gem_info = false
+        Whether to show held gem time limits and sfx for shattering.
 
 action_panel_show = true
         Whether to show or hide the action panel. This option is automatically
@@ -1851,7 +1894,8 @@ menu_colour ^= <match>:<colour>:<regex>, <colour>:<regex>, ...
             shop          (shop menus)
             stash         (the results from Ctrl-F)
             description   (the \ screen)
-            stats         (wielded/quivered items on the main screen stats panel)
+            stats         (wielded/quivered items on the main screen stats
+                           panel)
             resists       (items on the % screen)
 
         Possible non-item-related values are as follows; these require an
@@ -1876,6 +1920,7 @@ menu_colour ^= <match>:<colour>:<regex>, <colour>:<regex>, ...
             unrand          (For non-random artefacts.)
             melee           (Melee weapons, including magical staves.)
             ranged          (Ranged weapons.)
+            evoker          (Elemental evokers.)
             identified      (The item is fully identified.)
             known           (You recognize the item's subtype.)
             unidentified    (You don't recognize the item's subtype.)
@@ -1888,7 +1933,8 @@ menu_colour ^= <match>:<colour>:<regex>, <colour>:<regex>, ...
 
         When looking for menu_colour matches, these prefixes are treated as if
         they are prepended to the actual item name, for example:
-            identified evil_item forbidden misc a piece from Xom's chessboard (15/15)
+            identified evil_item forbidden misc a piece from Xom's
+            chessboard (15/15)
 
         The same prefixes can also be used for highlighting prompts pertaining
         to items matching the description, or to define autopickup_exceptions.
@@ -1928,7 +1974,7 @@ fire_order  = launcher, throwing, inscribed, spell, evokable, ability
 
         'launcher' refers to firing a wielded ranged weapon (i.e. crossbow,
         bow, sling). 'throwing' refers to all throwing ammo. Specific throwing
-        ammo types can be refered to by name ('javelin', 'boomerang', 'stone',
+        ammo types can be referred to by name ('javelin', 'boomerang', 'stone',
         'rock', 'net', 'dart'), but order of these only affects order internal
         to throwing ammo types; 'inscribed' can also be used to control the
         order of ammo that has been inscribed with "+f". See the "Inscriptions"
@@ -2119,7 +2165,7 @@ additional_macro_file = path/to/filename
         Add an additional macro file to be loaded after macro.txt.
         You can have multiple additional_macro_file lines.
 
-bindkey = [^D] CMD_BUTCHER
+bindkey = [^D] CMD_CHARACTER_DUMP
         Change which key invokes which command at a lower level of
         operation than macros. Useful in that macros cannot (yet)
         invoke each other, but a macro can invoke a command whose
@@ -2254,8 +2300,8 @@ tile_tag_pref = (none| named | enemy | tutorial )
         regular games use "enemy", arena mode uses "named", and tutorial/hints
         modes use "tutorial".
 
-tile_window_height = -90
 tile_window_width  = -90
+tile_window_height = -90
         Options for setting the width and height of the window, in pixels. When
         positive, these set the window size directly. When set to 0, the window
         is auto-sized. When set to a negative number, these values will be
@@ -2335,7 +2381,7 @@ tile_overlay_alpha_percent = 40
         Transparency value for the message window overlay background, as when
         tile_force_overlay is set to true. Setting this option to 0 will cause
         the message window to only display text without any background. And
-        setting this option to 100 will force an opaque backgroud to the
+        setting this option to 100 will force an opaque background to the
         message window.
 
 tile_full_screen = auto
@@ -2419,10 +2465,13 @@ tile_show_player_species = false
         If enabled, displays the player using the monster tile for her species,
         instead of using the normal doll and showing equipment.
 
-tile_show_threat_levels = nasty
+tile_show_threat_levels = nasty, unusual
         This option controls which monsters will be highlighted with their
-        threat level. Valid levels include: trivial, easy, tough, nasty.
-        You can specify multiple levels at once, or 'none'.
+        threat level. Valid levels include: trivial, easy, tough, nasty,
+        unusual. You can specify multiple levels at once, or 'none'.
+
+        When 'unusual' is specified, the option unusual_monster_items will
+        determine which items cause a monster to highlight as unusual.
 
 tile_layout_priority = minimap, inventory, command, spell, monster
         (Ordered list option)
@@ -2503,7 +2552,7 @@ tile_web_mouse_control = true
 
 tile_web_mobile_input_helper = auto
         This option controls an optional auxiliary input field in the WebTiles
-        interface that can be focused to enable the vitual keyboard on mobile
+        interface that can be focused to enable the virtual keyboard on mobile
         devices. When set to true or false, the field is manually enabled or
         disabled. When set to auto, the field is only shown on devices with
         a touch screen.
@@ -2972,21 +3021,21 @@ read_persist_options = false
         the skill menu is saved across games and automatically reloaded,
         unless set explicitly.
 
-5-b     DOS and Windows.
+5-b     Windows.
 ------------------------
 
 dos_use_background_intensity = false
-        On DOS and Windows, if you're using a console that can do
-        high-intensity background colours, set this option to true for
-        superior friend-highlighting. If your console doesn't like this
-        option, some friendly monsters will appear as blinking
-        characters (and setting this option to false may be advisable to
-        preserve your sanity in such cases).
+        On Windows, if you're using a console that can do high-intensity
+        background colours, set this option to true for superior
+        friend-highlighting. If your console doesn't like this option,
+        some friendly monsters will appear as blinking characters (and
+        setting this option to false may be advisable to preserve your
+        sanity in such cases).
 
 5-c     Unix.
 -------------
 allow_extended_colours = true
-        Atempt to use more than the eight basic terminal colours for crawl's
+        Attempt to use more than the eight basic terminal colours for crawl's
         bright colours. Most modern terminals should use this setting. If
         successful, this puts console into 16-color mode.
 
@@ -3080,6 +3129,10 @@ foreground_colour = lightgrey
         This option comes with the same baggage as the background_colour option.
         See its documentation for more details.
 
+use_terminal_default_colours = false
+        Use the terminal's default foreground and background colors. This can
+        be used to enable a transparent background.
+
 use_fake_cursor = true
         If true, Crawl draws the cursor explicitly on the level-map and
         targeting screens instead of relying on the term to draw the
@@ -3091,6 +3144,9 @@ use_fake_cursor = true
 
 6-  Lua.
 ========
+
+lua_max_memory = 16
+        Max memory in MB allowed for user Lua scripts.
 
 6-a  Including lua files.
 -------------------------

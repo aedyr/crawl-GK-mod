@@ -30,6 +30,7 @@
 #include "jobs.h"
 #include "lang-fake.h"
 #include "libutil.h"
+#include "macro.h" // command_to_string
 #include "menu.h"
 #include "message.h"
 #include "misc.h"
@@ -836,7 +837,7 @@ static void _print_stats_noise(int x, int y)
     // intentional non-reset: after it has started drawing, we always redraw
     // noise. There's not a lot of cost to this, and the logic for detecting
     // if/when silenced status has changed is extremely annoying. So
-    // you.redraw_noise is esentially only used to keep the noise bar from
+    // you.redraw_noise is essentially only used to keep the noise bar from
     // drawing while the game is starting up. (If someone can figure out how
     // to correctly detect all the silence special cases, feel free to add that
     // in and I will see if you succeeded -advil.)
@@ -1574,6 +1575,8 @@ void print_stats_level()
 void draw_border()
 {
     textcolour(HUD_CAPTION_COLOUR);
+
+    CGOTOXY(1,1, GOTO_CRT);
     clrscr();
 
     textcolour(Options.status_caption_colour);
@@ -1610,8 +1613,8 @@ void draw_border()
 #ifndef USE_TILE_LOCAL
 void smallterm_warning()
 {
-    clrscr();
     CGOTOXY(1,1, GOTO_CRT);
+    clrscr();
     CPRINTF("Your terminal window is too small; please resize to at least %d,%d", MIN_COLS, MIN_LINES);
 }
 #endif
@@ -1907,8 +1910,6 @@ int update_monster_pane()
             textbackground(BLACK);
         }
 
-        assert_valid_cursor_pos();
-
         if (mons.empty())
             return -1;
 
@@ -1922,46 +1923,6 @@ int update_monster_pane()
     return false;
 }
 #endif
-
-// Converts a numeric resistance to its symbolic counterpart.
-// Can handle any maximum level. The default is for single level resistances
-// (the most common case). Negative resistances are allowed.
-// Resistances with a maximum of up to 4 are spaced (arbitrary choice), and
-// starting at 5 levels, they are continuous.
-// params:
-//  level : actual resistance level
-//  max : maximum number of levels of the resistance
-//  immune : overwrites normal pip display for full immunity
-static string _itosym(int level, int max = 1, bool immune = false)
-{
-    if (max < 1)
-        return "";
-
-    if (immune)
-        return Options.char_set == CSET_ASCII ? "inf" : "\u221e"; //"∞"
-
-    string sym;
-    bool spacing = (max >= 5) ? false : true;
-
-    while (max > 0)
-    {
-        if (level == 0)
-            sym += ".";
-        else if (level > 0)
-        {
-            sym += "+";
-            --level;
-        }
-        else // negative resistance
-        {
-            sym += "x";
-            ++level;
-        }
-        sym += (spacing) ? " " : "";
-        --max;
-    }
-    return sym;
-}
 
 static const char *s_equip_slot_names[] =
 {
@@ -2501,7 +2462,7 @@ static string _resist_composer(const char * name, int spacing, int value,
     string out;
     out += _determine_colour_string(pos_resist ? value : -value, max, immune);
     out += chop_string(name, spacing);
-    out += _itosym(value, max, immune);
+    out += desc_resist(value, max, immune);
 
     return out;
 }
@@ -2655,6 +2616,12 @@ static string _extra_passive_effects()
     if (you.no_cast())
         passives.emplace_back("no spellcasting");
 
+    if (you.inaccuracy())
+    {
+        passives.emplace_back(
+            make_stringf("inaccuracy (-%d)", you.inaccuracy_penalty()).c_str());
+    }
+
     const int anger = you.angry();
     if (anger && !you.stasis() && !you.clarity() && !you.is_lifeless_undead())
     {
@@ -2695,7 +2662,7 @@ static string _extra_passive_effects()
     if (you.reflection())
         passives.emplace_back("reflection");
 
-    if (you.wearing(EQ_AMULET, AMU_ACROBAT))
+    if (player_acrobatic())
         passives.emplace_back("acrobat");
 
     if (you.clarity())
@@ -2807,7 +2774,7 @@ static string _status_mut_rune_list(int sw)
     if (!runes.empty())
     {
         text += make_stringf("\n<w>%s:</w> %d/%d rune%s: %s",
-                    stringize_glyph(get_item_symbol(SHOW_ITEM_MISCELLANY)).c_str(),
+                    command_to_string(CMD_DISPLAY_RUNES).c_str(),
                     (int)runes.size(), you.obtainable_runes,
                     you.obtainable_runes == 1 ? "" : "s",
                     comma_separated_line(runes.begin(), runes.end(),

@@ -183,6 +183,11 @@ Non-swimmers must wade through the water slowly and will occasionally fail to
 attack in melee when wading through shallow water; although large creatures are
 able to keep their balance, move at a normal speed, and avoid fumbling.
 %%%%
+Some mud
+
+A thick layer of gritty mud.
+<liquefied>
+%%%%
 The open sea
 
 An expanse of endless wind and waves, with not a lighthouse in sight. Anyone
@@ -711,8 +716,9 @@ allies will avoid stepping on it.
 %%%%
 A net trap
 
-A large concealed net launcher hanging from the dungeon's ceiling, enchanted
-by the powers of Zot to land only on intruders.
+A large concealed net launcher hanging from the dungeon's ceiling. Enchanted by
+the power of Zot, whenever an intelligent creature steps here - whether friend
+or foe - the net will land only on you.
 %%%%
 A pressure plate
 
@@ -771,6 +777,12 @@ inventory, the merchants will depart in search of other customers.
 A frozen archway
 
 A portal leading to an ice cave. The archway is gradually melting away.
+%%%%
+A glacial archway
+
+A portal leading to a glacial chasm, far more dangerous than the icy caverns
+found in the shallower reaches of the Dungeon. The archway is gradually melting
+away.
 %%%%
 A sand-covered staircase
 
@@ -881,7 +893,7 @@ The floor. It pulses to an unknown beat.
 # wizlab: Zonguldrok
 Zonguldrok's gravestone
 
-A gravestone. The name ‘Zonguldrok’ is engraved on it in golden letters.
+A gravestone of the house of Zonguldrok, still dripping with brackish ichor.
 %%%%
 A gravestone
 
@@ -1029,10 +1041,6 @@ A large window
 
 A window embedded in the side of an enormous metal pipe, allowing observation
 of the water flowing inside.
-%%%%
-A glass window
-
-A pockmarked, ultra-hard glass window.
 %%%%
 A petrified tree
 

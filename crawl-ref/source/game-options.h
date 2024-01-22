@@ -452,8 +452,12 @@ public:
             value.clear();
 
         vector<T> new_entries;
-        // XX a way to escape `,`?
-        for (const auto &part : split_string(",", field))
+        // note: this does *not* handle `\\` escapes right now (because they
+        // could also be relevant for subsplits). If your use case is likely
+        // to have this, you should handle it yourself somehow. (In some cases,
+        // e.g. where this is used for regex parsing, they should be left as-is
+        // in any case.)
+        for (const auto &part : split_string(",", field, true, false, -1, true))
         {
             if (part.empty())
                 continue;
@@ -463,7 +467,7 @@ public:
             if (ltyp == RCFILE_LINE_MINUS)
                 remove_matching(value, element);
             else
-                new_entries.push_back(move(element));
+                new_entries.push_back(std::move(element));
         }
         merge_lists(value, new_entries, ltyp == RCFILE_LINE_CARET);
         return GameOption::loadFromString(field, ltyp);

@@ -236,67 +236,77 @@ static bool _compare_mon_toughness(MenuEntry *entry_a, MenuEntry* entry_b)
     return a_toughness > b_toughness;
 }
 
-class DescMenu : public Menu
+namespace
 {
-public:
-    DescMenu(int _flags, bool _toggleable_sort) : Menu(_flags, ""), sort_alpha(true),
-    toggleable_sort(_toggleable_sort)
+    class DescMenu : public Menu
     {
-        set_highlighter(nullptr);
-
-        if (_toggleable_sort)
-            toggle_sorting();
-
-        set_prompt();
-    }
-
-    bool sort_alpha;
-    bool toggleable_sort;
-
-    void set_prompt()
-    {
-        string prompt = "Describe which? ";
-
-        if (toggleable_sort)
+    public:
+        DescMenu(int _flags, bool _toggleable_sort) : Menu(_flags, ""),
+            sort_alpha(true), toggleable_sort(_toggleable_sort)
         {
+            set_highlighter(nullptr);
+
+            if (_toggleable_sort)
+                toggle_sorting();
+
+            set_prompt();
+        }
+
+        bool sort_alpha;
+        bool toggleable_sort;
+
+        void set_prompt()
+        {
+            string prompt = "Describe which? ";
+
+            if (toggleable_sort)
+            {
+                if (sort_alpha)
+                    prompt += "(CTRL-S to sort by monster toughness)";
+                else
+                    prompt += "(CTRL-S to sort by name)";
+            }
+            set_title(new MenuEntry(prompt, MEL_TITLE));
+        }
+
+        bool skip_process_command(int keyin) override
+        {
+            if (keyin == '!')
+                return true; // Gauntlet branch help hotkey
+            return Menu::skip_process_command(keyin);
+        }
+
+        void sort()
+        {
+            if (!toggleable_sort)
+                return;
+
             if (sort_alpha)
-                prompt += "(CTRL-S to sort by monster toughness)";
+                ::sort(items.begin(), items.end(), _compare_mon_names);
             else
-                prompt += "(CTRL-S to sort by name)";
+                ::sort(items.begin(), items.end(), _compare_mon_toughness);
+
+            for (unsigned int i = 0, size = items.size(); i < size; i++)
+            {
+                const char letter = index_to_letter(i % 52);
+
+                items[i]->hotkeys.clear();
+                items[i]->add_hotkey(letter);
+            }
         }
-        set_title(new MenuEntry(prompt, MEL_TITLE));
-    }
 
-    void sort()
-    {
-        if (!toggleable_sort)
-            return;
-
-        if (sort_alpha)
-            ::sort(items.begin(), items.end(), _compare_mon_names);
-        else
-            ::sort(items.begin(), items.end(), _compare_mon_toughness);
-
-        for (unsigned int i = 0, size = items.size(); i < size; i++)
+        void toggle_sorting()
         {
-            const char letter = index_to_letter(i % 52);
+            if (!toggleable_sort)
+                return;
 
-            items[i]->hotkeys.clear();
-            items[i]->add_hotkey(letter);
+            sort_alpha = !sort_alpha;
+
+            sort();
+            set_prompt();
         }
-    }
-
-    void toggle_sorting()
-    {
-        if (!toggleable_sort)
-            return;
-
-        sort_alpha = !sort_alpha;
-
-        sort();
-        set_prompt();
-    }
-};
+    };
+}
 
 static vector<string> _get_desc_keys(string regex, db_find_filter filter)
 {
@@ -400,7 +410,11 @@ static vector<string> _get_cloud_keys()
     vector<string> names;
 
     for (int i = CLOUD_NONE + 1; i < NUM_CLOUD_TYPES; i++)
-        names.push_back(cloud_type_name((cloud_type) i) + " cloud");
+    {
+        const cloud_type cloud = static_cast<cloud_type>(i);
+        if (!cloud_is_removed(cloud))
+            names.push_back(cloud_type_name(cloud) + " cloud");
+    }
 
     return names;
 }
@@ -620,6 +634,7 @@ static bool _make_item_fake_unrandart(item_def &item, int unrand_index)
     // use API rather than unwinds so that sanity checks don't need to be
     // duplicated
     const auto prior_status = get_unique_item_status(unrand_index);
+    unwind_var<uint8_t> octo(you.octopus_king_rings, 0x0); // easier to do unconditionally
     const bool r = make_item_unrandart(item, unrand_index);
     set_unique_item_status(item, prior_status);
     return r;
@@ -892,10 +907,6 @@ void LookupType::display_keys(vector<string> &key_list) const
         describe(key);
         return true;
     };
-
-    // for some reason DescMenu is an InvMenu, so we need to do something to
-    // prevent examine crashes. Just alias it to regular selection.
-    desc_menu.on_examine = desc_menu.on_single_selection;
 
     while (true)
     {

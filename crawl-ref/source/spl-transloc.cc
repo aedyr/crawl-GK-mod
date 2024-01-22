@@ -53,6 +53,9 @@
 #include "teleport.h"
 #include "terrain.h"
 #include "tiledoll.h"
+#ifdef USE_TILE
+#include "tilepick.h"
+#endif
 #include "traps.h"
 #include "view.h"
 #include "viewmap.h"
@@ -425,7 +428,7 @@ spret frog_hop(bool fail, dist *target)
     crawl_state.cancel_cmd_repeat();
     mpr("Boing!");
     you.increase_duration(DUR_NO_HOP, 12 + random2(13));
-    apply_barbs_damage();
+    player_did_deliberate_movement();
 
     return spret::success; // TODO
 }
@@ -711,7 +714,7 @@ spret electric_charge(int powc, bool fail, const coord_def &target)
 
     move_player_to_grid(dest_pos, true);
     noisy(4, you.pos());
-    apply_barbs_damage();
+    player_did_deliberate_movement();
     you.clear_far_engulf(false, true);
     _charge_cloud_trail(orig_pos);
     for (auto it = target_path.begin(); it != target_path.end() - 2; ++it)
@@ -812,9 +815,8 @@ spret cast_blink(int pow, bool fail)
     fail_check();
     uncontrolled_blink();
 
-    int cooldown = div_rand_round(50 - pow, 10);
-    if (cooldown)
-        you.increase_duration(DUR_BLINK_COOLDOWN, 1 + random2(2) + cooldown);
+    you.increase_duration(DUR_BLINK_COOLDOWN,
+                          2 + random2(3) + div_rand_round(50 - pow, 10));
 
     return spret::success;
 }
@@ -1136,18 +1138,42 @@ void you_teleport_now(bool wizard_tele, bool teleportitis, string reason)
     }
 }
 
-spret cast_portal_projectile(int pow, bool fail)
+spret cast_dimensional_bullseye(int pow, monster *target, bool fail)
 {
+    if (target == nullptr || target->submerged() || !you.can_see(*target))
+    {
+        canned_msg(MSG_NOTHING_THERE);
+        // You cannot place a bullseye on invisible enemies, so just abort
+        return spret::abort;
+    }
+
+    if (stop_attack_prompt(target, false, you.pos()))
+        return spret::abort;
+
     fail_check();
-    if (!you.duration[DUR_PORTAL_PROJECTILE])
-        mpr("You begin teleporting projectiles to their destination.");
-    else
-        mpr("You renew your portal.");
-    // Calculate the accuracy bonus based on current spellpower.
-    you.attribute[ATTR_PORTAL_PROJECTILE] = pow;
-    int dur = 2 + random2(1 + div_rand_round(pow, 2))
-                + random2(1 + div_rand_round(pow, 5));
-    you.increase_duration(DUR_PORTAL_PROJECTILE, dur, 50);
+
+    // We can only have a bullseye on one target a time, so remove the old one
+    // if it's still active
+    if (you.props.exists(BULLSEYE_TARGET_KEY))
+    {
+        monster* old_targ =
+            monster_by_mid(you.props[BULLSEYE_TARGET_KEY].get_int());
+
+        if (old_targ)
+            old_targ->del_ench(ENCH_BULLSEYE_TARGET);
+    }
+
+    mprf("You create a dimensional link between your ranged weaponry and %s.",
+         target->name(DESC_THE).c_str());
+
+    // So we can automatically end the status if the target dies or becomes
+    // friendly
+    target->add_ench(ENCH_BULLSEYE_TARGET);
+
+    you.props[BULLSEYE_TARGET_KEY].get_int() = target->mid;
+    int dur = random_range(5 + div_rand_round(pow, 5),
+                           7 + div_rand_round(pow, 4));
+    you.set_duration(DUR_DIMENSIONAL_BULLSEYE, dur);
     return spret::success;
 }
 
@@ -1156,14 +1182,10 @@ string weapon_unprojectability_reason()
     if (!you.weapon())
         return "";
     const item_def &it = *you.weapon();
-    // These all cause attack prompts, which are awkward to handle.
-    // TODO: support these!
+    // These don't work properly when performing attacks against non-adjacent
+    // targets. Maybe support them in future?
     static const vector<int> forbidden_unrands = {
         UNRAND_POWER,
-        UNRAND_DEVASTATOR,
-        UNRAND_VARIABILITY,
-        UNRAND_SINGING_SWORD,
-        UNRAND_TORMENT,
         UNRAND_ARC_BLADE,
     };
     for (int urand : forbidden_unrands)
@@ -1177,8 +1199,22 @@ string weapon_unprojectability_reason()
     return "";
 }
 
+static void _animate_manass_hit(const coord_def p)
+{
+    if (!in_los_bounds_v(grid2view(p)))
+        return; // needed..?
+
+    const colour_t colour = LIGHTMAGENTA;
+#ifdef USE_TILE
+    view_add_tile_overlay(p, tileidx_zap(colour));
+#endif
+    view_add_glyph_overlay(p, {dchar_glyph(DCHAR_FIRED_ZAP),
+                                static_cast<unsigned short>(colour)});
+}
+
 spret cast_manifold_assault(int pow, bool fail, bool real)
 {
+    bool found_unsafe_target = false;
     vector<monster*> targets;
     for (monster_near_iterator mi(&you, LOS_NO_TRANS); mi; ++mi)
     {
@@ -1188,13 +1224,31 @@ spret cast_manifold_assault(int pow, bool fail, bool real)
             continue;
         if (!you.can_see(**mi))
             continue;
-        targets.emplace_back(*mi);
+
+        // Make a melee attack to test if we'd need a prompt to hit this target,
+        // and ignore all such targets entirely.
+        //
+        // We only perform this test for real casts, because otherwise the game
+        // prints a misleading message to the player first (about there being
+        // no targets in range)
+        if (real)
+        {
+            melee_attack atk(&you, *mi);
+            if (!atk.would_prompt_player())
+                targets.emplace_back(*mi);
+            else
+                found_unsafe_target = true;
+        }
+        else
+            targets.emplace_back(*mi);
     }
 
     if (targets.empty())
     {
-        if (real)
+        if (real && !found_unsafe_target)
             mpr("You can't see anything to attack.");
+        else if (real && found_unsafe_target)
+            mpr("You can't see anything you can safely attack.");
         return spret::abort;
     }
 
@@ -1223,10 +1277,11 @@ spret cast_manifold_assault(int pow, bool fail, bool real)
         mpr("Space momentarily warps into an impossible shape!");
 
     const int initial_time = you.time_taken;
+    const bool animate = (Options.use_animations & UA_BEAM) != UA_NONE;
 
     shuffle_array(targets);
     // UC is worse at launching multiple manifold assaults, since
-    // transmuters have a much easier time casting it.
+    // shapeshifters have a much easier time casting it.
     const size_t max_targets = weapon ? 2 + div_rand_round(pow, 50)
                                       : 1 + div_rand_round(pow, 100);
     for (size_t i = 0; i < max_targets && i < targets.size(); i++)
@@ -1235,6 +1290,9 @@ spret cast_manifold_assault(int pow, bool fail, bool real)
         // attack ends up actually setting time taken. (No quadratic effects.)
         you.time_taken = initial_time;
 
+        if (animate)
+            _animate_manass_hit(targets[i]->pos());
+
         melee_attack atk(&you, targets[i]);
         atk.is_projected = true;
         atk.attack();
@@ -1242,6 +1300,8 @@ spret cast_manifold_assault(int pow, bool fail, bool real)
         if (you.hp <= 0 || you.pending_revival)
             break;
     }
+    if (animate)
+        animation_delay(50, true);
 
     return spret::success;
 }
@@ -1365,11 +1425,6 @@ spret cast_apportation(int pow, bolt& beam, bool fail)
     return spret::success;
 }
 
-int golubria_fuzz_range()
-{
-    return orb_limits_translocation() ? 4 : 2;
-}
-
 bool golubria_valid_cell(coord_def p, bool just_check)
 {
     return in_bounds(p)
@@ -1400,12 +1455,9 @@ spret cast_golubrias_passage(int pow, const coord_def& where, bool fail)
         return spret::abort;
     }
 
-    // randomize position a bit to make it not as useful to use on monsters
-    // chasing you, as well as to not give away hidden trap positions
     int tries = 0;
     int tries2 = 0;
-    // Less accurate when the orb is interfering.
-    const int range = golubria_fuzz_range();
+    const int range = GOLUBRIA_FUZZ_RANGE;
     coord_def randomized_where = where;
     coord_def randomized_here = you.pos();
     do
@@ -1433,10 +1485,17 @@ spret cast_golubrias_passage(int pow, const coord_def& where, bool fail)
     if (tries >= 100 || tries2 >= 100)
     {
         if (you.trans_wall_blocking(randomized_where))
-            mpr("You cannot create a passage on the other side of the transparent wall.");
+        {
+            mpr("You cannot create a passage on the other side of the "
+                "transparent wall.");
+        }
         else
+        {
             // XXX: bleh, dumb message
-            mpr("Creating a passage of Golubria requires sufficient empty space.");
+            mpr("Creating a passage of Golubria requires sufficient empty "
+                "space.");
+        }
+
         return spret::abort;
     }
 
@@ -1452,9 +1511,6 @@ spret cast_golubrias_passage(int pow, const coord_def& where, bool fail)
         mpr("Something buggy happened.");
         return spret::abort;
     }
-
-    if (orb_limits_translocation())
-        mprf(MSGCH_ORB, "The Orb disrupts the stability of your passage!");
 
     trap->reveal();
     trap2->reveal();

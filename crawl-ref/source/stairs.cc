@@ -381,6 +381,7 @@ static bool _check_fall_down_stairs(const dungeon_feature_type ftype, bool going
     if (!you.airborne()
         && you.confused()
         && !feat_is_escape_hatch(ftype)
+        && !crawl_state.game_is_descent()
         && coinflip())
     {
         const char* fall_where = "down the stairs";
@@ -454,7 +455,7 @@ static void _maybe_use_runes(dungeon_feature_type ftype)
     switch (ftype)
     {
     case DNGN_ENTER_ZOT:
-        if (!you.level_visited(level_id(BRANCH_ZOT, 1)))
+        if (!you.level_visited(level_id(BRANCH_ZOT, 1)) && !crawl_state.game_is_descent())
             _rune_effect(ftype);
         break;
     case DNGN_EXIT_VAULTS:
@@ -748,7 +749,7 @@ void floor_transition(dungeon_feature_type how,
 
     // We "stepped".
     if (!forced)
-        apply_barbs_damage();
+        player_did_deliberate_movement();
 
     // Magical level changes (which currently only exist "downwards") need this.
     clear_trapping_net();
@@ -762,6 +763,12 @@ void floor_transition(dungeon_feature_type how,
         jiyva_end_oozemancy();
     if (you.duration[DUR_NOXIOUS_BOG])
         you.duration[DUR_NOXIOUS_BOG] = 0;
+    if (you.duration[DUR_DIMENSIONAL_BULLSEYE])
+    {
+        monster* targ = monster_by_mid(you.props[BULLSEYE_TARGET_KEY].get_int());
+        if (targ)
+            targ->del_ench(ENCH_BULLSEYE_TARGET);
+    }
 
     // Fire level-leaving trigger.
     leaving_level_now(how);
@@ -937,8 +944,10 @@ void floor_transition(dungeon_feature_type how,
                 mpr("Zot already knows this place too well. Descend or flee this branch!");
             else
                 mpr("Zot's attention fixes on you again. Descend or flee this branch!");
+#if TAG_MAJOR_VERSION == 34
             if (you.species == SP_METEORAN)
                 update_vision_range();
+#endif
         }
         else if (was_bezotted)
         {
@@ -946,9 +955,12 @@ void floor_transition(dungeon_feature_type how,
                 mpr("Zot has no power in the Abyss.");
             else
                 mpr("You feel Zot lose track of you.");
+#if TAG_MAJOR_VERSION == 34
             if (you.species == SP_METEORAN)
                 update_vision_range();
+#endif
         }
+        print_gem_warnings(gem_for_branch(branch), 0);
 
         if (how == DNGN_ENTER_VAULTS && !runes_in_pack())
         {
@@ -994,7 +1006,7 @@ void floor_transition(dungeon_feature_type how,
 
     // Warn Formicids if they cannot shaft here
     if (player_has_ability(ABIL_SHAFT_SELF, true)
-                                && !is_valid_shaft_level())
+                                && !is_valid_shaft_level(false))
     {
         mpr("Beware, you cannot shaft yourself on this level.");
     }
@@ -1007,6 +1019,10 @@ void floor_transition(dungeon_feature_type how,
         _new_level_amuses_xom(how, whence, shaft,
                               (shaft ? whither.depth - old_level.depth : 1),
                               !forced);
+
+        // scary hack!
+        if (crawl_state.game_is_descent() && !env.properties.exists(DESCENT_STAIRS_KEY))
+            load_level(how, LOAD_RESTART_GAME, old_level);
     }
 
     // This should maybe go in load_level?
@@ -1217,6 +1233,8 @@ level_id stair_destination(dungeon_feature_type feat, const string &dst,
 
     case DNGN_EXIT_ABYSS:
 #if TAG_MAJOR_VERSION == 34
+        if (you.char_class == JOB_ABYSSAL_KNIGHT && you.level_stack.empty())
+            return level_id(BRANCH_DUNGEON, 1);
     case DNGN_EXIT_PORTAL_VAULT:
 #endif
     case DNGN_EXIT_PANDEMONIUM:

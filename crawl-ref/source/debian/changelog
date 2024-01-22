@@ -1,3 +1,13 @@
+crawl (2:0.31.0-1) unstable; urgency=low
+
+  * New upstream release.
+ -- gammafunk <gammafunk@gmail.com>  Thu, 18 Jan 2024 21:23:12 -0600
+
+crawl (2:0.30.1-1) unstable; urgency=low
+
+  * New upstream release.
+ -- advil <rawlins@gmail.com>  Fri, 30 Jun 2023 14:08:55 -0400
+
 crawl (2:0.30.0-1) unstable; urgency=low
 
   * New upstream release.
@@ -542,7 +552,7 @@ crawl (2:0.5.2-1) unstable; urgency=low
   * Appease lintian:
     * debhelper-but-no-misc-depends;
     * extra-license-file;
-    * spelling-error-in-binary: persistant.
+    * spelling-error-in-binary: persistent.
   * Add a watch file for uscan(1).
   * Drop Debian.README; it should be clear to everyone by now that DCSS is
     the actively developed Crawl codebase.

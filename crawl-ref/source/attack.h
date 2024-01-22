@@ -18,6 +18,8 @@ const int UMBRA_TO_HIT_MALUS = -3;
 const int CONFUSION_TO_HIT_MALUS = -5;
 const int TRANSLUCENT_SKIN_TO_HIT_MALUS = -2;
 
+const int BULLSEYE_TO_HIT_DIV = 6;
+
 class attack
 {
 // Public Properties
@@ -40,10 +42,7 @@ public:
     int     to_hit;
     int     damage_done;
     int     special_damage; // TODO: We'll see if we can remove this
-    int     aux_damage;     // TOOD: And this too
-
-    int     min_delay;
-    int     final_attack_delay;
+    int     aux_damage;     // TODO: And this too
 
     beam_type special_damage_flavour;
 
@@ -161,6 +160,8 @@ protected:
     brand_type random_chaos_brand();
     void drain_defender();
     void drain_defender_speed();
+    void maybe_trigger_jinxbite();
+    void maybe_trigger_fugue_wail(const coord_def pos);
 
     virtual int inflict_damage(int dam, beam_type flavour = NUM_BEAMS,
                                bool clean = false);

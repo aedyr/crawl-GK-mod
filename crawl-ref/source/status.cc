@@ -7,6 +7,7 @@
 #include "artefact.h"
 #include "branch.h"
 #include "cloud.h"
+#include "dungeon.h" // DESCENT_STAIRS_KEY
 #include "duration-type.h"
 #include "env.h"
 #include "evoke.h"
@@ -26,6 +27,7 @@
 #include "spl-summoning.h" // NEXT_DOOM_HOUND_KEY in duration-data
 #include "spl-transloc.h" // for you_teleport_now() in duration-data
 #include "stairs.h" // rise_through_ceiling
+#include "state.h" // crawl_state
 #include "stringutil.h"
 #include "throw.h"
 #include "transform.h"
@@ -167,6 +169,7 @@ static void _describe_stat_zero(status_info& inf, stat_type st);
 static void _describe_terrain(status_info& inf);
 static void _describe_invisible(status_info& inf);
 static void _describe_zot(status_info& inf);
+static void _describe_gem(status_info& inf);
 
 bool fill_status_info(int status, status_info& inf)
 {
@@ -229,12 +232,14 @@ bool fill_status_info(int status, status_info& inf)
             inf.short_text   = "sluggish";
             inf.long_text    = "You are moving sluggishly.";
         }
-        if (you.in_liquid())
-            inf.light_colour = DARKGREY;
         break;
 
     case STATUS_ZOT:
         _describe_zot(inf);
+        break;
+
+    case STATUS_GEM:
+        _describe_gem(inf);
         break;
 
     case STATUS_AIRBORNE:
@@ -248,6 +253,28 @@ bool fill_status_info(int status, status_info& inf)
             inf.light_text   = "Mesm";
             inf.short_text   = "mesmerised";
             inf.long_text    = "You are mesmerised.";
+        }
+        break;
+
+    case STATUS_PEEKING:
+        if (crawl_state.game_is_descent() && !env.properties.exists(DESCENT_STAIRS_KEY)
+            && you.elapsed_time > 0)
+        {
+            inf.light_colour = WHITE;
+            inf.light_text   = "Peek";
+            inf.short_text   = "peeking";
+            inf.long_text    = "You are peeking down the stairs.";
+        }
+        break;
+
+    case STATUS_IN_DEBT:
+        if (you.props.exists(DESCENT_DEBT_KEY))
+        {
+            inf.light_colour = RED;
+            inf.light_text = make_stringf("Debt (%d)",
+                          you.props[DESCENT_DEBT_KEY].get_int());
+            inf.short_text   = "in debt";
+            inf.long_text    = "You are in debt. Gold earned will pay it off.";
         }
         break;
 
@@ -361,6 +388,19 @@ bool fill_status_info(int status, status_info& inf)
         break;
     }
 
+    case DUR_RAMPAGE_HEAL:
+    {
+        const int rh_pwr = you.props[RAMPAGE_HEAL_KEY].get_int();
+        if (rh_pwr > 0)
+        {
+            const int rh_lvl = you.get_mutation_level(MUT_ROLLPAGE);
+            inf.light_colour = rh_lvl < 2 ? LIGHTBLUE : LIGHTMAGENTA;
+            inf.light_text   = make_stringf(rh_lvl < 2 ? "MPRegen (%d)"
+                                                       : "Regen (%d)", rh_pwr);
+        }
+        break;
+    }
+
     case STATUS_INVISIBLE:
         _describe_invisible(inf);
         break;
@@ -455,11 +495,31 @@ bool fill_status_info(int status, status_info& inf)
         }
         break;
 
-    case DUR_WEREBLOOD:
-        inf.light_text
-            = make_stringf("Slay (%u)",
-                           you.props[WEREBLOOD_KEY].get_int());
-        break;
+    case DUR_FUGUE:
+    {
+        int fugue_pow = you.props[FUGUE_KEY].get_int();
+        // Hey now / you're a damned star / get your fugue on / go slay
+        const char* fugue_star = fugue_pow == FUGUE_MAX_STACKS ? "*" : "";
+        inf.light_text = make_stringf("Fugue (%s%u%s)",
+                                      fugue_star, fugue_pow, fugue_star);
+    }
+    break;
+
+    case DUR_STICKY_FLAME:
+    {
+        int intensity = you.props[STICKY_FLAME_POWER_KEY].get_int();
+
+        // These thresholds are fairly arbitrary and likely could use adjusting.
+        if (intensity >= 13)
+        {
+            inf.light_colour = LIGHTRED;
+            inf.light_text = "Fire++";
+        }
+        else if (intensity > 7)
+            inf.light_text = "Fire+";
+        else
+            inf.light_text = "Fire";
+    }
 
     case STATUS_BEOGH:
         if (env.level_state & LSTATE_BEOGH && can_convert_to_beogh())
@@ -651,13 +711,6 @@ bool fill_status_info(int status, status_info& inf)
         break;
     }
 
-    case DUR_PORTAL_PROJECTILE:
-    {
-        if (!is_pproj_active())
-            inf.light_colour = DARKGREY;
-        break;
-    }
-
     case STATUS_ORB:
     {
         if (player_has_orb())
@@ -697,6 +750,16 @@ bool fill_status_info(int status, status_info& inf)
             inf.light_text   = "Duel";
             inf.short_text   = "duelling";
             inf.long_text    = "You are engaged in single combat.";
+        }
+        break;
+
+    case STATUS_CANINE_FAMILIAR_ACTIVE:
+        if (canine_familiar_is_alive())
+        {
+            inf.light_colour = WHITE;
+            inf.light_text   = "Dog";
+            inf.short_text   = "inugami summoned";
+            inf.long_text    = "Your inugami has been summoned.";
         }
         break;
 
@@ -747,6 +810,39 @@ bool fill_status_info(int status, status_info& inf)
             break;
     }
     return true;
+}
+
+static colour_t _gem_light_colour(int d_aut_left)
+{
+    if (d_aut_left < 100)
+        return LIGHTMAGENTA;
+    if (d_aut_left < 250)
+        return RED;
+    if (d_aut_left < 500)
+        return YELLOW;
+    return WHITE;
+}
+
+static void _describe_gem(status_info& inf)
+{
+    if (!Options.always_show_gems || !gem_clock_active())
+        return;
+
+    const gem_type gem = gem_for_branch(you.where_are_you);
+    if (gem == NUM_GEM_TYPES)
+        return;
+
+    if (!Options.more_gem_info && you.gems_found[gem])
+        return;
+
+    const int time_taken = you.gem_time_spent[gem];
+    const int limit = gem_time_limit(gem);
+    if (time_taken >= limit)
+        return; // already lost...
+
+    const int d_aut_left = (limit - time_taken + 9) / 10;
+    inf.light_text = make_stringf("Gem (%d)", d_aut_left);
+    inf.light_colour = _gem_light_colour(d_aut_left);
 }
 
 static void _describe_zot(status_info& inf)
@@ -899,12 +995,11 @@ static void _describe_airborne(status_info& inf)
     const bool perm      = you.permanent_flight();
     const bool expiring  = (!perm && dur_expiring(DUR_FLIGHT));
     const bool emergency = you.props[EMERGENCY_FLIGHT_KEY].get_bool();
-    const string desc   = you.tengu_flight() ? " quickly and evasively" : "";
 
     inf.light_colour = perm ? WHITE : emergency ? LIGHTRED : BLUE;
     inf.light_text   = "Fly";
-    inf.short_text   = "flying" + desc;
-    inf.long_text    = "You are flying" + desc + ".";
+    inf.short_text   = "flying";
+    inf.long_text    = "You are flying.";
     inf.light_colour = _dur_colour(inf.light_colour, expiring);
     _mark_expiring(inf, expiring);
 }
@@ -997,7 +1092,7 @@ static void _describe_invisible(status_info& inf)
 /**
  * Does a given duration tick down simply over time?
  *
- * @param dur   The duration in question (e.g. DUR_PETRIFICATION).
+ * @param dur   The duration in question (e.g. DUR_PETRIFIED).
  * @return      Whether the duration's end_msg is non-null.
  */
 bool duration_decrements_normally(duration_type dur)
@@ -1008,7 +1103,7 @@ bool duration_decrements_normally(duration_type dur)
 /**
  * What message should a given duration print when it expires, if any?
  *
- * @param dur   The duration in question (e.g. DUR_PETRIFICATION).
+ * @param dur   The duration in question (e.g. DUR_PETRIFIED).
  * @return      A message to print for the duration when it ends.
  */
 const char *duration_end_message(duration_type dur)
@@ -1020,7 +1115,7 @@ const char *duration_end_message(duration_type dur)
  * What message should a given duration print when it passes its
  * expiring threshold, if any?
  *
- * @param dur   The duration in question (e.g. DUR_PETRIFICATION).
+ * @param dur   The duration in question (e.g. DUR_PETRIFIED).
  * @return      A message to print.
  */
 const char *duration_expire_message(duration_type dur)
@@ -1032,7 +1127,7 @@ const char *duration_expire_message(duration_type dur)
  * How much should the duration be decreased by when it passes its
  * expiring threshold (to fuzz the remaining time), if at all?
  *
- * @param dur   The duration in question (e.g. DUR_PETRIFICATION).
+ * @param dur   The duration in question (e.g. DUR_PETRIFIED).
  * @return      A random value to reduce the remaining duration by; may be 0.
  */
 int duration_expire_offset(duration_type dur)
@@ -1044,7 +1139,7 @@ int duration_expire_offset(duration_type dur)
  * At what number of turns remaining is the given duration considered to be
  * 'expiring', for purposes of messaging & status light colouring?
  *
- * @param dur   The duration in question (e.g. DUR_PETRIFICATION).
+ * @param dur   The duration in question (e.g. DUR_PETRIFIED).
  * @return      The maximum number of remaining turns at which the duration
  *              is considered 'expiring'; may be 0.
  */
@@ -1056,7 +1151,7 @@ int duration_expire_point(duration_type dur)
 /**
  * What channel should the duration messages be printed in?
  *
- * @param dur   The duration in question (e.g. DUR_PETRIFICATION).
+ * @param dur   The duration in question (e.g. DUR_PETRIFIED).
  * @return      The appropriate message channel, e.g. MSGCH_RECOVERY.
  */
 msg_channel_type duration_expire_chan(duration_type dur)
@@ -1068,7 +1163,7 @@ msg_channel_type duration_expire_chan(duration_type dur)
 /**
  * If a duration has some special effect when ending, trigger it.
  *
- * @param dur   The duration in question (e.g. DUR_PETRIFICATION).
+ * @param dur   The duration in question (e.g. DUR_PETRIFIED).
  */
 void duration_end_effect(duration_type dur)
 {

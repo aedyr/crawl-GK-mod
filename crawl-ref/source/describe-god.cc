@@ -59,7 +59,8 @@ static int _gold_level()
            (you.gold >=  5000) ? 5 :
            (you.gold >=  1000) ? 4 :
            (you.gold >=   500) ? 3 :
-           (you.gold >=   100) ? 2
+           (you.gold >=   100) ? 2 :
+           (you.props.exists(DESCENT_DEBT_KEY)) ? 0
                                : 1;
 }
 
@@ -233,7 +234,7 @@ static const char *divine_title[][8] =
         "Impassioned",        "Rapturous",             "Ecstatic",                "Rhythm of Life and Death"},
 
     // Hepliaklqana -- memory/ancestry theme
-    {"Damnatio Memoriae",       "Hazy",             "@Adj@ Child",              "Storyteller",
+    {"Damnatio Memoriae",       "Hazy",             "@Adj@ @Child@",              "Storyteller",
         "Brooding",           "Anamnesiscian",               "Grand Scion",                "Unforgettable"},
 
     // Wu Jian -- animal/chinese martial arts monk theme
@@ -264,6 +265,7 @@ string god_title(god_type which_god, species_type which_species, int piety)
         { "Genus", species::name(which_species, species::SPNAME_GENUS) },
         { "Walking", species::walking_title(which_species) + "ing" },
         { "Walker", species::walking_title(which_species) + "er" },
+        { "Child", species::child_name(which_species) },
     };
 
     return replace_keys(title, replacements);
@@ -926,7 +928,6 @@ static formatted_string _describe_god_powers(god_type which_god)
 
     case GOD_GOZAG:
         have_any = true;
-        desc.cprintf("You passively detect gold.\n");
         desc.cprintf("%s turns your defeated foes' bodies to gold.\n",
                 uppercase_first(god_name(which_god)).c_str());
         desc.cprintf("Your enemies may become distracted by gold.\n");
@@ -1061,16 +1062,16 @@ static void build_partial_god_ui(god_type which_god, shared_ptr<ui::Popup>& popu
     auto icon = make_shared<Image>();
     const tileidx_t idx = tileidx_feature_base(altar_for_god(which_god));
     icon->set_tile(tile_def(idx));
-    title_hbox->add_child(move(icon));
+    title_hbox->add_child(std::move(icon));
 #endif
 
     auto title = make_shared<Text>(topline.trim());
     title->set_margin_for_sdl(0, 0, 0, 16);
-    title_hbox->add_child(move(title));
+    title_hbox->add_child(std::move(title));
 
     title_hbox->set_main_alignment(Widget::CENTER);
     title_hbox->set_cross_alignment(Widget::CENTER);
-    vbox->add_child(move(title_hbox));
+    vbox->add_child(std::move(title_hbox));
 
     desc_sw = make_shared<Switcher>();
     more_sw = make_shared<Switcher>();
@@ -1111,7 +1112,7 @@ static void build_partial_god_ui(god_type which_god, shared_ptr<ui::Popup>& popu
         auto text = make_shared<Text>(desc.trim());
         text->set_wrap_text(true);
         scroller->set_child(text);
-        desc_sw->add_child(move(scroller));
+        desc_sw->add_child(std::move(scroller));
 
         more_sw->add_child(make_shared<Text>(
                 formatted_string::parse_string(mores[mores_index][i])));

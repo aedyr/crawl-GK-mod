@@ -24,8 +24,9 @@
 #include "describe.h"
 #include "end.h"
 #include "god-conduct.h"
-#include "invent.h"
 #include "item-prop.h"
+#include "item-status-flag-type.h"
+#include "invent.h"
 #include "libutil.h"
 #include "message.h"
 #include "output.h"
@@ -231,7 +232,9 @@ static unordered_set<int> _player_nonbook_spells =
     // items
     SPELL_THUNDERBOLT,
     SPELL_PHANTOM_MIRROR, // this isn't cast directly, but the player code at
-                          // least uses the enum value
+                          // least uses the enum value.
+    SPELL_TREMORSTONE,    // not cast directly, but the spell type is used for
+                          // damage and noise display.
     SPELL_SONIC_WAVE,
     // religion
     SPELL_SMITING,
@@ -586,7 +589,7 @@ private:
                 "   [<w>?</w>] help"; // XX hardcoded for this menu
 
         if (search_text.size())
-            return pad_more_with(desc.str(), "[<w>Esc</w>] clear"); // esc is harcoded for this case
+            return pad_more_with(desc.str(), "[<w>Esc</w>] clear"); // esc is hardcoded for this case
         else
             return pad_more_with_esc(desc.str());
     }
@@ -1089,14 +1092,13 @@ bool learn_spell(spell_type specspell, bool wizard, bool interactive)
     return true;
 }
 
-bool book_has_title(const item_def &book)
+bool book_has_title(const item_def &book, bool ident)
 {
     ASSERT(book.base_type == OBJ_BOOKS);
 
     // No "A Great Wizards, Vol. II"
     if (book.sub_type == BOOK_BIOGRAPHIES_II
         || book.sub_type == BOOK_BIOGRAPHIES_VII
-        || book.sub_type == BOOK_OZOCUBU
         || book.sub_type == BOOK_MAXWELL
         || book.sub_type == BOOK_UNRESTRAINED)
     {
@@ -1107,7 +1109,8 @@ bool book_has_title(const item_def &book)
         return false;
 
     return book.props.exists(BOOK_TITLED_KEY)
-           && book.props[BOOK_TITLED_KEY].get_bool() == true;
+           && book.props[BOOK_TITLED_KEY].get_bool() == true
+           && (ident || item_ident(book, ISFLAG_KNOW_PROPERTIES));
 }
 
 spret divine_exegesis(bool fail)

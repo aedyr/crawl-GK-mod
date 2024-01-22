@@ -118,7 +118,7 @@ int actor::skill_rdiv(skill_type sk, int mult, int div) const
     return div_rand_round(skill(sk, mult * 256), div * 256);
 }
 
-int actor::check_willpower(const actor* source, int power)
+int actor::check_willpower(const actor* source, int power) const
 {
     int wl = willpower();
 
@@ -202,6 +202,27 @@ void actor::shield_block_succeeded(actor *attacker)
         && unrand_entry->melee_effects)
     {
         unrand_entry->melee_effects(sh, this, attacker, false, 0);
+    }
+}
+
+int actor::get_res(int res) const
+{
+    switch (res)
+    {
+    case MR_RES_ELEC:      return res_elec();
+    case MR_RES_POISON:    return res_poison();
+    case MR_RES_FIRE:      return res_fire();
+    case MR_RES_COLD:      return res_cold();
+    case MR_RES_NEG:       return res_negative_energy();
+    case MR_RES_MIASMA:    return res_miasma();
+    case MR_RES_ACID:      return res_acid();
+    case MR_RES_TORMENT:   return res_torment();
+    case MR_RES_PETRIFY:   return res_petrify();
+    case MR_RES_DAMNATION: return res_damnation();
+    case MR_RES_STEAM:     return res_steam();
+    default:
+        ASSERT(false);
+        return -1;
     }
 }
 
@@ -337,13 +358,10 @@ int actor::spirit_shield(bool items) const
     return ss;
 }
 
-bool actor::rampaging(bool items) const
+bool actor::rampaging() const
 {
-    return items &&
-           (wearing_ego(EQ_ALL_ARMOUR, SPARM_RAMPAGING)
-            || scan_artefacts(ARTP_RAMPAGING)
-            || is_player() && (player_equip_unrand(UNRAND_SEVEN_LEAGUE_BOOTS)
-                               || you.has_mutation(MUT_ROLLPAGE)));
+    return wearing_ego(EQ_ALL_ARMOUR, SPARM_RAMPAGING)
+           || scan_artefacts(ARTP_RAMPAGING);
 }
 
 int actor::apply_ac(int damage, int max_damage, ac_type ac_rule, bool for_real) const
@@ -354,35 +372,33 @@ int actor::apply_ac(int damage, int max_damage, ac_type ac_rule, bool for_real) 
     switch (ac_rule)
     {
     case ac_type::none:
-        return damage; // no GDR, too
+        return damage;
     case ac_type::proportional:
         saved = damage - apply_chunked_AC(damage, ac);
-        saved = max(saved, div_rand_round(max_damage * gdr, 100));
         return max(damage - saved, 0);
-
     case ac_type::normal:
         saved = random2(1 + ac);
         break;
     case ac_type::half:
         saved = random2(1 + ac) / 2;
         ac /= 2;
-        gdr /= 2;
         break;
     case ac_type::triple:
         saved = random2(1 + ac);
         saved += random2(1 + ac);
         saved += random2(1 + ac);
         ac *= 3;
-        // apply GDR only twice rather than thrice, that's probably still waaay
-        // too good. 50% gives 75% rather than 100%, too.
-        gdr = 100 - gdr * gdr / 100;
         break;
     default:
         die("invalid AC rule");
     }
 
-    saved = max(saved, min(gdr * max_damage / 100, div_rand_round(ac, 2)));
-    if (for_real && (damage > 0) && (saved >= damage) && is_player())
+    // We only support GDR for normal melee attacks at the moment.
+    // EVIL HACK: other callers of this function always pass 0 for max_damage,
+    // hence disabling GDR. This is very silly! We should do this better!
+    if (ac_rule == ac_type::normal)
+        saved = max(saved, min(gdr * max_damage / 100, div_rand_round(ac, 2)));
+    if (for_real && (damage > 0) && is_player())
     {
         const item_def *body_armour = slot_item(EQ_BODY_ARMOUR);
         if (body_armour)
@@ -392,6 +408,19 @@ int actor::apply_ac(int damage, int max_damage, ac_type ac_rule, bool for_real) 
     }
 
     return max(damage - saved, 0);
+}
+
+int actor::shield_block_limit() const
+{
+    const item_def *sh = shield();
+    if (!sh)
+        return 1;
+    return ::shield_block_limit(*sh);
+}
+
+bool actor::shield_exhausted() const
+{
+    return shield_blocks >= shield_block_limit();
 }
 
 bool actor_slime_wall_immune(const actor *act)
@@ -587,15 +616,15 @@ bool actor::has_invalid_constrictor(bool move) const
 
     // Direct constriction (e.g. by nagas and octopode players or AT_CONSTRICT)
     // must happen between adjacent squares.
-    if (get_constrict_type() == CONSTRICT_MELEE)
+    const auto typ = get_constrict_type();
+    if (typ == CONSTRICT_MELEE)
         return !ignoring_player && !adjacent(attacker->pos(), pos());
 
     // Indirect constriction requires the defender not to move.
     return move
-        // Indirect constriction requires reachable ground.
-        || !feat_has_solid_floor(env.grid(pos()))
-        // Constriction doesn't work out of LOS.
-        || !ignoring_player && !attacker->see_cell(pos());
+        // Constriction doesn't work out of LOS, to avoid sauciness.
+        || !ignoring_player && !attacker->see_cell(pos())
+        || !feat_has_solid_floor(env.grid(pos()));
 }
 
 /**
@@ -695,8 +724,9 @@ bool actor::can_engulf(const actor &defender) const
 
 bool actor::can_constrict(const actor &defender, constrict_type typ) const
 {
-    if (defender.is_constricted())
+    if (defender.is_constricted() || defender.res_constrict() >= 3)
         return false;
+
 
     if (typ == CONSTRICT_MELEE)
     {
@@ -704,10 +734,10 @@ bool actor::can_constrict(const actor &defender, constrict_type typ) const
             && (!is_constricting() || has_usable_tentacle());
     }
 
-    return can_see(defender)
-        && defender.res_constrict() < 3
-        // All current indrect forms of constriction require reachable ground.
-        && feat_has_solid_floor(env.grid(defender.pos()));
+    if (!see_cell_no_trans(defender.pos()))
+        return false;
+
+    return feat_has_solid_floor(env.grid(defender.pos()));
 }
 
 #ifdef DEBUG_DIAGNOSTICS
@@ -731,13 +761,12 @@ void actor::constriction_damage_defender(actor &defender, int duration)
     int damage = constriction_damage(typ);
 
     DIAG_ONLY(const int basedam = damage);
-    damage += div_rand_round(damage * stepdown((float)duration, 50.0),
-                             BASELINE_DELAY * 5);
+    damage += div_rand_round(damage * duration, BASELINE_DELAY * 5);
     if (is_player() && typ == CONSTRICT_MELEE)
         damage = div_rand_round(damage * (27 + 2 * you.experience_level), 81);
 
     DIAG_ONLY(const int durdam = damage);
-    damage -= random2(1 + (defender.armour_class() / 2));
+    damage -= random2(1 + (div_rand_round(defender.armour_class(), 2)));
     DIAG_ONLY(const int acdam = damage);
     damage = timescale_damage(this, damage);
     DIAG_ONLY(const int timescale_dam = damage);
@@ -1105,9 +1134,10 @@ bool actor::knockback(const actor &cause, int dist, int pow, string source_name)
 
     if (you.can_see(*this))
     {
-        mprf("%s %s knocked back by the %s.",
+        mprf("%s %s knocked back%s%s.",
              name(DESC_THE).c_str(),
              conj_verb("are").c_str(),
+             !source_name.empty() ? " by the " : "",
              source_name.c_str());
     }
 
@@ -1123,6 +1153,67 @@ bool actor::knockback(const actor &cause, int dist, int pow, string source_name)
                                 actor_to_death_source(&cause));
 
     return true;
+}
+
+coord_def actor::stumble_pos(coord_def targ) const
+{
+    if (is_stationary() || resists_dislodge("") || targ == pos())
+        return coord_def();
+
+    const coord_def oldpos = pos();
+    ray_def ray;
+    fallback_ray(oldpos, targ, ray);
+    if (!ray.advance()) // !?
+        return coord_def();
+
+    const coord_def back_dir = oldpos - ray.pos();
+    const coord_def newpos = oldpos + back_dir;
+    if (!adjacent(newpos, oldpos)) // !?
+        return coord_def();
+
+    // copied from actor::knockback, ew
+    if (!in_bounds(newpos)
+        || cell_is_solid(newpos)
+        || !can_pass_through(newpos)
+        || !is_habitable(newpos))
+    {
+        return coord_def();
+    }
+
+    const actor* other = actor_at(newpos);
+    if (other && can_see(*other))
+        return coord_def();
+
+    return newpos;
+}
+
+void actor::stumble_away_from(coord_def targ, string src)
+{
+    const coord_def oldpos = pos();
+    const coord_def newpos = stumble_pos(targ);
+
+    if (newpos.origin()
+        || actor_at(newpos)
+        || resists_dislodge("being knocked back"))
+    {
+        return;
+    }
+
+    if (is_player())
+        mprf("%s sends you backwards.", uppercase_first(src).c_str());
+    else if (you.can_see(*this))
+        mprf("%s is knocked back by %s.", name(DESC_THE).c_str(), src.c_str());
+
+    move_to_pos(newpos);
+
+    stop_directly_constricting_all(true);
+    if (get_constrict_type() == CONSTRICT_MELEE)
+        stop_being_constricted();
+    clear_far_engulf();
+
+    apply_location_effects(oldpos, is_player() ? KILL_YOU_MISSILE
+                                               : KILL_MON_MISSILE,
+                           actor_to_death_source(this));
 }
 
 /// Is this creature despised by the so-called 'good gods'?

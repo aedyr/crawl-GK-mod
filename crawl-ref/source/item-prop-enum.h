@@ -310,16 +310,14 @@ enum misc_item_type
     MISC_QUAD_DAMAGE, // Sprint only
 
     MISC_PHIAL_OF_FLOODS,
-#if TAG_MAJOR_VERSION == 34
     MISC_SACK_OF_SPIDERS,
-#endif
     MISC_ZIGGURAT,
 
     MISC_PHANTOM_MIRROR,
 #if TAG_MAJOR_VERSION == 34
     MISC_DECK_OF_ODDITIES,
-#endif
     MISC_XOMS_CHESSBOARD,
+#endif
     MISC_TIN_OF_TREMORSTONES,
     MISC_CONDENSER_VANE,
 
@@ -342,11 +340,11 @@ const vector<misc_item_type> misc_types =
 #endif
     MISC_LIGHTNING_ROD, MISC_PHIAL_OF_FLOODS,
     MISC_QUAD_DAMAGE,
-#if TAG_MAJOR_VERSION == 34
     MISC_SACK_OF_SPIDERS,
-#endif
     MISC_PHANTOM_MIRROR,
+#if TAG_MAJOR_VERSION == 34
     MISC_XOMS_CHESSBOARD,
+#endif
     MISC_ZIGGURAT,
 #if TAG_MAJOR_VERSION == 34
     MISC_BOTTLED_EFREET, MISC_BUGGY_EBONY_CASKET,
@@ -405,6 +403,28 @@ enum rune_type
     NUM_RUNE_TYPES
 };
 
+// Order roughly matches branch_type.
+enum gem_type
+{
+    GEM_DUNGEON,
+#if TAG_MAJOR_VERSION == 34
+    GEM_ORC,
+#endif
+    GEM_ELF,
+    GEM_LAIR,
+    GEM_SWAMP,
+    GEM_SHOALS,
+    GEM_SNAKE,
+    GEM_SPIDER,
+    GEM_SLIME,
+    GEM_VAULTS,
+    GEM_CRYPT,
+    GEM_TOMB,
+    GEM_DEPTHS,
+    GEM_ZOT,
+    NUM_GEM_TYPES
+};
+
 enum scroll_type
 {
     SCR_IDENTIFY,
@@ -425,7 +445,7 @@ enum scroll_type
 #endif
     SCR_IMMOLATION,
     SCR_BLINKING,
-    SCR_MAGIC_MAPPING,
+    SCR_REVELATION,
     SCR_FOG,
     SCR_ACQUIREMENT,
 #if TAG_MAJOR_VERSION == 34
@@ -545,7 +565,7 @@ enum stave_type
 #endif
     STAFF_FIRE,
     STAFF_COLD,
-    STAFF_POISON,
+    STAFF_ALCHEMY,
 #if TAG_MAJOR_VERSION == 34
     STAFF_ENERGY,
 #endif
@@ -624,7 +644,7 @@ enum weapon_type
 #endif
 
 #if TAG_MAJOR_VERSION > 34
-    WPN_HAND_CROSSBOW,
+    WPN_HAND_CANNON,
 #endif
     WPN_ARBALEST,
 #if TAG_MAJOR_VERSION > 34
@@ -632,6 +652,9 @@ enum weapon_type
 #endif
 
     WPN_SHORTBOW,
+#if TAG_MAJOR_VERSION > 34
+    WPN_ORCBOW,
+#endif
     WPN_LONGBOW,
 
 #if TAG_MAJOR_VERSION > 34
@@ -673,10 +696,11 @@ enum weapon_type
 
 #if TAG_MAJOR_VERSION == 34
     WPN_FUSTIBALUS,
-    WPN_HAND_CROSSBOW,
+    WPN_HAND_CANNON,
     WPN_TRIPLE_CROSSBOW,
 
     WPN_CUTLASS,
+    WPN_ORCBOW,
 #endif
 
     NUM_WEAPONS,
@@ -809,5 +833,20 @@ enum item_set_type
     ITEM_SET_BLAST_WANDS,
     ITEM_SET_ALLY_SCROLLS,
     ITEM_SET_AREA_MISCELLANY,
+    ITEM_SET_ALLY_MISCELLANY,
     NUM_ITEM_SET_TYPES
+};
+
+enum talisman_type
+{
+    TALISMAN_BEAST,
+    TALISMAN_MAW,
+    TALISMAN_SERPENT,
+    TALISMAN_BLADE,
+    TALISMAN_STATUE,
+    TALISMAN_DRAGON,
+    TALISMAN_DEATH,
+    TALISMAN_STORM,
+    TALISMAN_FLUX,
+    NUM_TALISMANS,
 };

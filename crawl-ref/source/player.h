@@ -40,11 +40,10 @@
 #include "unique-item-status-type.h"
 
 #define ICY_ARMOUR_KEY "ozocubu's_armour_pow"
-#define TRANSFORM_POW_KEY "transform_pow"
 #define BARBS_MOVE_KEY "moved_with_barbs_status"
 #define HORROR_PENALTY_KEY "horror_penalty"
 #define POWERED_BY_DEATH_KEY "powered_by_death_strength"
-#define WEREBLOOD_KEY "wereblood_bonus"
+#define FUGUE_KEY "fugue_of_the_fallen_bonus"
 #define FORCE_MAPPABLE_KEY "force_mappable"
 #define MANA_REGEN_AMULET_ACTIVE "mana_regen_amulet_active"
 #define TEMP_WATERWALK_KEY "temp_waterwalk"
@@ -52,6 +51,12 @@
 #define PARALYSED_BY_KEY "paralysed_by"
 #define PETRIFIED_BY_KEY "petrified_by"
 #define FROZEN_RAMPARTS_KEY "frozen_ramparts_position"
+#define DREAMSHARD_KEY "dreamshard"
+#define DESCENT_DEBT_KEY "descent_debt"
+#define DESCENT_WATER_BRANCH_KEY "descent_water_branch"
+#define DESCENT_POIS_BRANCH_KEY "descent_poison_branch"
+#define RAMPAGE_HEAL_KEY "rampage_heal_strength"
+#define RAMPAGE_HEAL_MAX 7
 
 // display/messaging breakpoints for penalties from Ru's MUT_HORROR
 #define HORROR_LVL_EXTREME  3
@@ -173,10 +178,16 @@ public:
     // PC's symbol (usually @) and colour.
     monster_type symbol;
     transformation form;
+    transformation default_form;
+    item_def active_talisman;
 
     FixedVector< item_def, ENDOFPACK > inv;
     FixedBitVector<NUM_RUNE_TYPES> runes;
     int obtainable_runes; // can be != 15 in Sprint
+
+    FixedBitVector<NUM_GEM_TYPES> gems_found;
+    FixedBitVector<NUM_GEM_TYPES> gems_shattered;
+    FixedVector<int, NUM_GEM_TYPES> gem_time_spent;
 
     FixedBitVector<NUM_SPELLS> spell_library;
     FixedBitVector<NUM_SPELLS> hidden_spells;
@@ -380,7 +391,6 @@ public:
     level_id travel_z;
 
     runrest running;                    // Nonzero if running/traveling.
-    bool travel_ally_pace;
 
     bool received_weapon_warning;
     bool received_noskill_warning;
@@ -505,6 +515,7 @@ public:
     bool can_swim(bool permanently = false) const;
     bool can_water_walk() const;
     int visible_igrd(const coord_def&) const;
+    bool rampaging() const override;
     bool is_banished() const override;
     bool is_sufficiently_rested(bool starting=false) const; // Up to rest_wait_percent HP and MP.
     bool is_web_immune() const override;
@@ -527,7 +538,6 @@ public:
     bool is_fiery() const override;
     bool is_skeletal() const override;
 
-    bool tengu_flight() const;
     int heads() const override { return 1; }
 
     bool spellcasting_unholy() const;
@@ -731,6 +741,7 @@ public:
     void slow_down(actor *, int str) override;
     void confuse(actor *, int strength) override;
     void weaken(actor *attacker, int pow) override;
+    bool strip_willpower(actor *attacker, int dur, bool quiet = false) override;
     bool heal(int amount) override;
     bool drain(const actor *, bool quiet = false, int pow = 3) override;
     void splash_with_acid(actor *evildoer) override;
@@ -752,11 +763,11 @@ public:
 
     monster_type mons_species(bool zombie_base = false) const override;
 
-    mon_holy_type holiness(bool temp = true) const override;
+    mon_holy_type holiness(bool temp = true, bool incl_form = true) const override;
     bool undead_or_demonic(bool temp = true) const override;
     bool evil() const override;
     bool is_holy() const override;
-    bool is_nonliving(bool temp = true) const override;
+    bool is_nonliving(bool temp = true, bool incl_form = true) const override;
     int how_chaotic(bool check_spells_god) const override;
     bool is_unbreathing() const override;
     bool is_insubstantial() const override;
@@ -839,7 +850,6 @@ public:
 
     bool shielded() const override;
     int shield_bonus() const override;
-    int shield_block_penalty() const override;
     int shield_bypass_ability(int tohit) const override;
     void shield_block_succeeded(actor *attacker) override;
     bool missile_repulsion() const override;
@@ -853,18 +863,23 @@ public:
     int  skill(skill_type skill, int scale = 1, bool real = false,
                bool temp = true) const override;
 
-    bool do_shaft(bool check_terrain = true) override;
-    bool shaftable(bool check_terrain = true) const;
+    bool using_talisman(const item_def &talisman) const;
+
+    bool do_shaft() override;
+    bool shaftable() const;
 
     bool can_do_shaft_ability(bool quiet = false) const;
     bool do_shaft_ability();
 
     bool can_potion_heal(bool temp=true);
     int scale_potion_healing(int healing_amount);
+    int scale_potion_mp_healing(int healing_amount);
 
     void apply_location_effects(const coord_def &oldpos,
                                 killer_type killer = KILL_NONE,
                                 int killernum = -1) override;
+
+    void did_deliberate_movement() override;
 
     void be_agile(int pow);
 
@@ -986,6 +1001,7 @@ bool player_can_hear(const coord_def& p, int hear_distance = 999);
 bool player_is_shapechanged();
 
 void update_acrobat_status();
+bool player_acrobatic();
 
 bool is_effectively_light_armour(const item_def *item);
 bool player_effectively_in_light_armour();
@@ -993,7 +1009,7 @@ bool player_effectively_in_light_armour();
 int player_shield_racial_factor();
 int player_armour_shield_spell_penalty();
 
-int player_movement_speed(bool check_terrain = true);
+int player_movement_speed(bool check_terrain = true, bool temp = true);
 
 int player_icemail_armour_class();
 int player_condensation_shield_class();
@@ -1038,8 +1054,9 @@ int player_spec_death();
 int player_spec_earth();
 int player_spec_fire();
 int player_spec_hex();
-int player_spec_poison();
+int player_spec_alchemy();
 int player_spec_summ();
+int player_spec_tloc();
 
 int player_speed();
 
@@ -1050,7 +1067,7 @@ int get_teleportitis_level();
 
 int player_monster_detect_radius();
 
-int slaying_bonus(bool throwing = false);
+int slaying_bonus(bool throwing = false, bool random = true);
 
 unsigned int exp_needed(int lev, int exp_apt = -99);
 bool will_gain_life(int lev);
@@ -1075,12 +1092,13 @@ void update_player_symbol();
 void update_vision_range();
 
 maybe_bool you_can_wear(equipment_type eq, bool temp = false);
+bool player_can_use_armour();
 bool player_has_feet(bool temp = true, bool include_mutations = true);
 
 bool enough_hp(int minimum, bool suppress_msg, bool abort_macros = true);
 bool enough_mp(int minimum, bool suppress_msg, bool abort_macros = true);
 
-void calc_hp(bool scale = false, bool set = false);
+void calc_hp(bool scale = false);
 void calc_mp(bool scale = false);
 
 void dec_hp(int hp_loss, bool fatal, const char *aux = nullptr);
@@ -1140,8 +1158,10 @@ int poison_survival();
 
 bool miasma_player(actor *who, string source_aux = "");
 
-bool napalm_player(int amount, string source, string source_aux = "");
-void dec_napalm_player(int delay);
+bool sticky_flame_player(int intensity, int duration, string source, string source_aux = "");
+void dec_sticky_flame_player(int delay);
+void shake_off_sticky_flame();
+void end_sticky_flame_player();
 
 bool spell_slow_player(int pow);
 bool slow_player(int turns);
@@ -1154,6 +1174,8 @@ void dec_elixir_player(int delay);
 void dec_ambrosia_player(int delay);
 void dec_channel_player(int delay);
 void dec_frozen_ramparts(int delay);
+void reset_rampage_heal_duration();
+void apply_rampage_heal();
 bool invis_allowed(bool quiet = false, string *fail_reason = nullptr,
                                                         bool temp = true);
 bool flight_allowed(bool quiet = false, string *fail_reason = nullptr);

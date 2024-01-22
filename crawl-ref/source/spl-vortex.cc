@@ -141,8 +141,6 @@ spret cast_polar_vortex(int powc, bool fail)
     you.props[POLAR_VORTEX_KEY].get_int() = you.elapsed_time;
     you.props[VORTEX_POWER_KEY] = powc;
     _set_vortex_durations();
-    if (you.has_mutation(MUT_TENGU_FLIGHT))
-        you.redraw_evasion = true;
 
     return spret::success;
 }
@@ -235,6 +233,13 @@ static int _age_needed(int r)
     if (r > POLAR_VORTEX_RADIUS)
         return INT_MAX;
     return sqr(r) * 7 / 5;
+}
+
+dice_def polar_vortex_dice(int pow, bool random)
+{
+    if (random)
+        return dice_def(12, div_rand_round(pow, 15));
+    return dice_def(12, pow / 15);
 }
 
 void polar_vortex_damage(actor *caster, int dur)
@@ -374,7 +379,7 @@ void polar_vortex_damage(actor *caster, int dur)
                             || !victim->is_monster()
                             || !god_protects(caster, victim->as_monster(), true)))
                     {
-                        const int base_dmg = div_rand_round(roll_dice(12, rpow), 15);
+                        const int base_dmg = polar_vortex_dice(rpow, true).roll();
                         const int post_res_dmg
                             = resist_adjust_damage(victim, BEAM_ICE, base_dmg);
                         const int post_ac_dmg
@@ -494,8 +499,6 @@ void cancel_polar_vortex(bool tloc)
             // Vortex ended by using something stairslike, so the destination
             // is safe
             you.duration[DUR_FLIGHT] = 0;
-            if (you.has_mutation(MUT_TENGU_FLIGHT))
-                you.redraw_evasion = true;
         }
     }
     you.duration[DUR_VORTEX] = 0;

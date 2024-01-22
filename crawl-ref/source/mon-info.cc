@@ -24,6 +24,7 @@
 #include "god-passive.h" // passive_t::neutral_slimes
 #include "item-prop.h"
 #include "item-status-flag-type.h"
+#include "items.h" // item_is_unusual
 #include "libutil.h"
 #include "los.h"
 #include "message.h"
@@ -55,7 +56,7 @@ static map<enchant_type, monster_info_flags> trivial_ench_mb_mappings = {
     { ENCH_SILVER_CORONA,   MB_GLOWING },
     { ENCH_SLOW,            MB_SLOWED },
     { ENCH_SICK,            MB_SICK },
-    { ENCH_INSANE,          MB_INSANE },
+    { ENCH_FRENZIED,        MB_FRENZIED },
     { ENCH_HASTE,           MB_HASTED },
     { ENCH_MIGHT,           MB_STRONG },
     { ENCH_CONFUSION,       MB_CONFUSED },
@@ -118,14 +119,17 @@ static map<enchant_type, monster_info_flags> trivial_ench_mb_mappings = {
     { ENCH_RING_OF_MUTATION,MB_CLOUD_RING_MUTATION },
     { ENCH_RING_OF_FOG,     MB_CLOUD_RING_FOG },
     { ENCH_RING_OF_ICE,     MB_CLOUD_RING_ICE },
-    { ENCH_RING_OF_DRAINING,MB_CLOUD_RING_DRAINING },
+    { ENCH_RING_OF_MISERY,  MB_CLOUD_RING_MISERY },
     { ENCH_RING_OF_ACID,    MB_CLOUD_RING_ACID },
     { ENCH_CONCENTRATE_VENOM, MB_CONCENTRATE_VENOM },
     { ENCH_FIRE_CHAMPION,   MB_FIRE_CHAMPION },
     { ENCH_ANTIMAGIC,       MB_ANTIMAGIC },
     { ENCH_ANGUISH,         MB_ANGUISH },
-    { ENCH_SIMULACRUM,      MB_SIMULACRUM },
     { ENCH_TP,              MB_TELEPORTING },
+    { ENCH_BOUND,           MB_BOUND },
+    { ENCH_BULLSEYE_TARGET, MB_BULLSEYE_TARGET },
+    { ENCH_VITRIFIED,       MB_VITRIFIED },
+    { ENCH_CURSE_OF_AGONY,  MB_CURSE_OF_AGONY },
 };
 
 static monster_info_flags ench_to_mb(const monster& mons, enchant_type ench)
@@ -134,8 +138,7 @@ static monster_info_flags ench_to_mb(const monster& mons, enchant_type ench)
     // internally valid.
     if (mons.paralysed() && (ench == ENCH_SLOW || ench == ENCH_HASTE
                       || ench == ENCH_SWIFT
-                      || ench == ENCH_PETRIFIED
-                      || ench == ENCH_PETRIFYING))
+                      || ench == ENCH_PETRIFIED || ench == ENCH_PETRIFYING))
     {
         return NUM_MB_FLAGS;
     }
@@ -178,6 +181,8 @@ static monster_info_flags ench_to_mb(const monster& mons, enchant_type ench)
             return MB_MORE_POISONED;
         else
             return MB_MAX_POISONED;
+    case ENCH_CONTAM:
+        return mons.get_ench(ench).degree == 1 ? MB_CONTAM_LIGHT : MB_CONTAM_HEAVY;
     case ENCH_SHORT_LIVED:
     case ENCH_SLOWLY_DYING:
         if (mons.type == MONS_WITHERED_PLANT)
@@ -354,6 +359,7 @@ monster_info::monster_info(monster_type p_type, monster_type p_base_type)
     hd = mons_class_hit_dice(type);
     ac = get_mons_class_ac(type);
     ev = base_ev = get_mons_class_ev(type);
+    sh = 0;
     mresists = get_mons_class_resists(type);
     mr = mons_class_willpower(type, base_type);
     can_see_invis = mons_class_sees_invis(type, base_type);
@@ -589,16 +595,20 @@ monster_info::monster_info(const monster* m, int milev)
     ac = m->armour_class();
     ev = m->evasion();
     base_ev = m->base_evasion();
+    sh = m->shield_class();
     mr = m->willpower();
     can_see_invis = m->can_see_invisible();
     if (m->nightvision())
         props[NIGHTVISION_KEY] = true;
-    mresists = get_mons_resists(*m);
+    mresists = m->all_resists();
     mitemuse = mons_itemuse(*m);
     mbase_speed = mons_base_speed(*m, true);
     menergy = mons_energy(*m);
     can_go_frenzy = m->can_go_frenzy();
     can_feel_fear = m->can_feel_fear(false);
+    sleepwalking = m->sleepwalking();
+    backlit = m->backlit(false);
+    umbraed = m->umbra();
 
     // Not an MB_ because it's rare.
     if (m->cloud_immune())
@@ -670,9 +680,9 @@ monster_info::monster_info(const monster* m, int milev)
     if (!m->friendly())
     {
         const stab_type st = find_stab_type(&you, *m, false);
-        if (st == STAB_INVISIBLE && !mb[MB_BLIND])
+        if (!you.visible_to(m))
             mb.set(MB_CANT_SEE_YOU);
-        else if (st == STAB_DISTRACTED && !mb[MB_UNAWARE] && !mb[MB_WANDERING])
+        if (st == STAB_DISTRACTED && !mb[MB_UNAWARE] && !mb[MB_WANDERING])
             mb.set(MB_DISTRACTED_ONLY);
     }
 
@@ -725,6 +735,12 @@ monster_info::monster_info(const monster* m, int milev)
         if (m->props.exists(MIRRORED_GHOST_KEY))
             props[MIRRORED_GHOST_KEY] = m->props[MIRRORED_GHOST_KEY];
     }
+    // Otherwise the description lies wildly about the average hp of melee pan
+    // lords, and an average player will have no idea how durable their canine
+    // familiar really is - which matters when you want to keep it alive.
+    else if (m->type == MONS_PANDEMONIUM_LORD || m->type == MONS_INUGAMI)
+        props[KNOWN_MAX_HP_KEY] = (int)(m->ghost->max_hp);
+
     if (m->has_ghost_brand())
         props[SPECIAL_WEAPON_KEY] = m->ghost_brand();
 
@@ -778,6 +794,9 @@ monster_info::monster_info(const monster* m, int milev)
         {
             inv[i].reset(
                 new item_def(get_item_known_info(env.item[m->inv[i]])));
+            // Monsters have unlimited ammo for wands and for non-net throwing.
+            if (i == MSLOT_WAND)
+                inv[i]->charges = 0;
             if (i == MSLOT_MISSILE && inv[i]->sub_type != MI_THROWING_NET)
                 inv[i]->quantity = 1;
         }
@@ -870,7 +889,20 @@ string monster_info::get_max_hp_desc() const
         mhp *= slime_size;
 
     mhp /= scale;
-    return make_stringf("about %d", mhp);
+    return make_stringf("~%d", mhp);
+}
+
+/// HP regenerated every (scale) turns.
+int monster_info::regen_rate(int scale) const
+{
+    if (!can_regenerate() || is(MB_SICK) /* ? */)
+        return 0;
+    if (mons_class_fast_regen(type) || is(MB_REGENERATION) /* ? */)
+        return mons_class_regen_amount(type) * scale;
+
+    // Duplicates monster::natural_regen_rate.
+    const int divider = max(((15 - hd) + 2 /*round up*/) / 4, 1);
+    return min(scale, max(1, hd * scale / (divider * 25)));
 }
 
 /**
@@ -878,16 +910,10 @@ string monster_info::get_max_hp_desc() const
  */
 int monster_info::lighting_modifiers() const
 {
-    // Lighting effects.
-    if (is(MB_GLOWING)       // corona, silver corona (!)
-        || is(MB_BURNING)    // sticky flame
-        || is(MB_HALOED))
-    {
+    if (backlit)
         return BACKLIGHT_TO_HIT_BONUS;
-    }
-    if (is(MB_UMBRAED) && !you.nightvision())
+    if (umbraed && !you.nightvision())
         return UMBRA_TO_HIT_MALUS;
-
     return 0;
 }
 
@@ -946,12 +972,8 @@ string monster_info::_core_name() const
         else
             nametype = base_type;
     }
-    else if (type == MONS_PILLAR_OF_SALT
-             || type == MONS_BLOCK_OF_ICE
-             || type == MONS_SENSED)
-    {
+    else if (mons_class_is_remnant(type) || type == MONS_SENSED)
         nametype = base_type;
-    }
 
     string s;
 
@@ -1095,8 +1117,7 @@ string monster_info::common_name(description_level_type desc) const
 
     if (_has_hydra_multi_attack(*this)
         && type != MONS_SENSED
-        && type != MONS_BLOCK_OF_ICE
-        && type != MONS_PILLAR_OF_SALT
+        && !mons_class_is_remnant(type)
         && mons_species(type) != MONS_SERPENT_OF_HELL)
     {
         ASSERT(num_heads > 0);
@@ -1189,7 +1210,12 @@ string monster_info::common_name(description_level_type desc) const
 
 bool monster_info::has_proper_name() const
 {
-    return !mname.empty() && !mons_is_ghost_demon(type)
+    // Some ghost demon monsters (Pan lords, player ghosts, and player
+    // illusions) have name overrides.
+    return !mname.empty()
+            && type != MONS_PANDEMONIUM_LORD
+            && type != MONS_PLAYER_GHOST
+            && type != MONS_PLAYER_ILLUSION
             && !is(MB_NAME_REPLACE) && !is(MB_NAME_ADJECTIVE) && !is(MB_NAME_SUFFIX);
 }
 
@@ -1397,6 +1423,11 @@ void monster_info::to_string(int count, string& desc, int& desc_colour,
         colour_type = MLC_NEUTRAL;
         break;
     case ATT_HOSTILE:
+        if (has_unusual_items())
+        {
+            colour_type = MLC_UNUSUAL;
+            break;
+        }
         switch (threat)
         {
         case MTHRT_TRIVIAL: colour_type = MLC_TRIVIAL; break;
@@ -1621,10 +1652,9 @@ size_type monster_info::body_size() const
 
 bool monster_info::net_immune() const
 {
-    // too big
-    return body_size() >= SIZE_GIANT
     // nets go right through (but weapons don't..?)
-        || mons_class_flag(type, M_INSUBSTANTIAL)
+    return mons_class_flag(type, M_INSUBSTANTIAL)
+        || mons_genus(type) == MONS_JELLY
     // tentacles are too weird. don't mess with em
         || mons_is_tentacle_or_tentacle_segment(type)
     // if you net something that doesn't move (positionally or attacking),
@@ -1652,6 +1682,26 @@ bool monster_info::fellow_slime() const {
     return attitude == ATT_GOOD_NEUTRAL
         && have_passive(passive_t::neutral_slimes)
         && mons_class_is_slime(type);
+}
+
+vector<string> monster_info::get_unusual_items() const
+{
+    vector<string> names;
+    for (unsigned int i = 0; i <= MSLOT_LAST_VISIBLE_SLOT; ++i)
+    {
+        if (!inv[i])
+            continue;
+
+        const item_def* item = inv[i].get();
+        if (item_is_unusual(*item))
+            names.push_back(item->name(DESC_A, false, false, true, false));
+    }
+    return names;
+}
+
+bool monster_info::has_unusual_items() const
+{
+    return attitude == ATT_HOSTILE && !get_unusual_items().empty();
 }
 
 // Only checks for spells from preset monster spellbooks.
@@ -1854,6 +1904,7 @@ void mons_conditions_string(string& desc, const vector<monster_info>& mi,
         int reach_count = 0;
         int constrict_count = 0;
         int trample_count = 0;
+        int drag_count = 0;
 
         for (int j = start; j < start + count; ++j)
         {
@@ -1871,6 +1922,8 @@ void mons_conditions_string(string& desc, const vector<monster_info>& mi,
                 constrict_count++;
             if (_has_attack_flavour(mi[j], AF_TRAMPLE))
                 trample_count++;
+            if (_has_attack_flavour(mi[j], AF_DRAG))
+                drag_count++;
         }
 
         if (wand_count)
@@ -1921,6 +1974,13 @@ void mons_conditions_string(string& desc, const vector<monster_info>& mi,
             conditions.push_back(_condition_string(trample_count, count,
                                                    {MB_UNSAFE, "trample",
                                                     "trample", "trample"}));
+        }
+
+        if (drag_count)
+        {
+            conditions.push_back(_condition_string(drag_count, count,
+                                                   {MB_UNSAFE, "drag",
+                                                    "drag", "drag"}));
         }
     }
 

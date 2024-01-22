@@ -383,6 +383,7 @@ resists_t get_mons_class_resists(monster_type mc)
     return _apply_holiness_resists(resists, mons_class_holiness(mc));
 }
 
+/// All resists intrinsic to a monster, excluding enchants, equip, etc.
 resists_t get_mons_resists(const monster& m)
 {
     const monster& mon = get_tentacle_head(m);
@@ -661,6 +662,20 @@ const char * holiness_name(mon_holy_type_flags which_holiness)
     }
 }
 
+/// Hack for demonspawn monsters. TODO: de-bitfieldify!
+const char * single_holiness_description(mon_holy_type holiness)
+{
+    for (const auto bit : mon_holy_type::range())
+    {
+        if (!(holiness & bit))
+            continue;
+        if (bit == MH_NATURAL && holiness != MH_NATURAL)
+            continue;
+        return holiness_name(bit);
+    }
+    return "eggplant";
+}
+
 string holiness_description(mon_holy_type holiness)
 {
     string description = "";
@@ -815,7 +830,8 @@ bool mons_is_firewood(const monster& mon)
 // "body" in a purely grammatical sense.
 bool mons_has_body(const monster& mon)
 {
-    if (mon.type == MONS_FLYING_SKULL
+    if (mon.type == MONS_WEEPING_SKULL
+        || mon.type == MONS_LAUGHING_SKULL
         || mons_species(mon.type) == MONS_CURSE_SKULL // including Murray
         || mon.type == MONS_CURSE_TOE
         || mon.type == MONS_DEATH_COB
@@ -854,7 +870,7 @@ int cheibriados_monster_player_speed_delta(const monster& mon)
 
 bool cheibriados_thinks_mons_is_fast(const monster& mon)
 {
-    return cheibriados_monster_player_speed_delta(mon) > 0;
+    return mons_base_speed(mon) >= 10;
 }
 
 bool mons_is_projectile(monster_type mc)
@@ -1524,8 +1540,8 @@ bool mons_can_be_blinded(monster_type mc)
  * The undead, nonliving, vegetative, or unblindable cannot be dazzled.
  *
  * @param mc    The class of monster in question.
- * @return      Whether monsters of this type can get ENCH_BLIND from Dazzling
- *              Spray.
+ * @return      Whether monsters of this type can get `ENCH_BLIND` from Dazzling
+ *              Spray or wands of light.
  */
 bool mons_can_be_dazzled(monster_type mc)
 {
@@ -1621,6 +1637,19 @@ bool mons_class_fast_regen(monster_type mc)
     return mons_class_flag(mc, M_FAST_REGEN);
 }
 
+int mons_class_regen_amount(monster_type mc)
+{
+    switch (mc)
+    {
+    case MONS_PARGHIT:            return 27;
+    case MONS_DEMONIC_CRAWLER:
+    case MONS_PROTEAN_PROGENITOR:
+    case MONS_ASPIRING_FLESH:
+    case MONS_MARTYRED_SHADE:     return 6;
+    default:                      return 1;
+    }
+}
+
 /**
  * Do monsters of the given type ever leave a hide?
  *
@@ -1684,6 +1713,11 @@ bool mons_class_is_animated_weapon(monster_type type)
     return type == MONS_DANCING_WEAPON || type == MONS_SPECTRAL_WEAPON;
 }
 
+bool mons_class_is_remnant(monster_type mc)
+{
+    return mons_class_flag(mc, M_REMNANT);
+}
+
 bool mons_class_is_animated_object(monster_type type)
 {
     return mons_class_is_animated_weapon(type)
@@ -1745,6 +1779,7 @@ bool mons_can_be_spectralised(const monster& mon, bool divine)
 {
     return mons_class_can_be_spectralised(mon.type, divine)
            && !mon.is_summoned()
+           && !mons_is_tentacle_or_tentacle_segment(mon.type)
            && (!testbits(mon.flags, MF_NO_REWARD)
                || mon.props.exists(KIKU_WRETCH_KEY))
            && (mons_has_attacks(mon, true)
@@ -1860,6 +1895,7 @@ static const set<attack_flavour> allowed_zombie_af = {
     AF_REACH,
     AF_CRUSH,
     AF_TRAMPLE,
+    AF_DRAG,
 };
 
 static mon_attack_def _downscale_zombie_attack(const monster& mons,
@@ -2070,13 +2106,21 @@ mon_attack_def mons_attack_spec(const monster& m, int attk_number,
         // TODO: randomization here is not the greatest way of doing any of
         // these...
         if (attk.type == AT_RANDOM)
-            attk.type = random_choose(AT_HIT, AT_GORE);
+        {
+            attk.type = random_choose(AT_BITE, AT_STING, AT_SPORE, AT_TOUCH,
+                                      AT_PECK, AT_HEADBUTT, AT_PUNCH, AT_KICK,
+                                      AT_TENTACLE_SLAP, AT_TAIL_SLAP, AT_GORE,
+                                      AT_TRUNK_SLAP);
+        }
 
         if (attk.type == AT_CHERUB)
-            attk.type = random_choose(AT_HIT, AT_BITE, AT_PECK, AT_GORE);
+            attk.type = random_choose(AT_HEADBUTT, AT_BITE, AT_PECK, AT_GORE);
 
         if (attk.flavour == AF_DRAIN_STAT)
-            attk.flavour = random_choose(AF_DRAIN_STR, AF_DRAIN_INT,AF_DRAIN_DEX);
+        {
+            attk.flavour = random_choose(AF_DRAIN_STR, AF_DRAIN_INT,
+                                         AF_DRAIN_DEX);
+        }
     }
 
     // Slime creature attacks are multiplied by the number merged.
@@ -2092,6 +2136,22 @@ static int _mons_damage(monster_type mc, int rt)
         rt = 0;
     ASSERT_smc();
     return smc->attack[rt].damage;
+}
+
+string mon_attack_name_short(attack_type attack)
+{
+    switch (attack)
+    {
+    case AT_SPORE:         return "spore";
+    case AT_TENTACLE_SLAP: return "tentacle";
+    case AT_TAIL_SLAP:     return "tail";
+    case AT_TRUNK_SLAP:    return "trunk";
+    case AT_POUNCE:        return "pounce";
+    case AT_CHERUB:
+    case AT_RANDOM:        return "hit"; // eh
+    default:
+        return mon_attack_name(attack, false);
+    }
 }
 
 /**
@@ -2229,6 +2289,18 @@ int flavour_damage(attack_flavour flavour, int HD, bool random)
             if (random)
                 return HD * 3 / 2 + random2(HD);
             return HD * 5 / 2;
+        case AF_DROWN:
+            if (random)
+                return HD * 3 / 4 + random2(HD * 3 / 4);
+            return HD * 3 / 2;
+        // Note: This value is only used for displaying monster damage with xv
+        //       and is a lie against non-player targets.
+        //       Actual attacks call actor->splash_with_acid() directly.
+        case AF_ACID:
+        case AF_REACH_TONGUE:
+            if (random)
+                return roll_dice(4, 3);
+            return 12;
         default:
             return 0;
     }
@@ -2252,6 +2324,11 @@ bool flavour_has_reach(attack_flavour flavour)
         default:
             return false;
     }
+}
+
+bool flavour_has_mobility(attack_flavour flavour)
+{
+    return flavour == AF_SWOOP || flavour == AF_FLANK;
 }
 
 bool mons_invuln_will(const monster& mon)
@@ -2457,11 +2534,12 @@ int exper_value(const monster& mon, bool real, bool legacy)
             case SPELL_CALL_DOWN_DAMNATION:
             case SPELL_HURL_DAMNATION:
             case SPELL_SYMBOL_OF_TORMENT:
-            case SPELL_GLACIATE:
             case SPELL_FIRE_STORM:
-            case SPELL_SHATTER:
-            case SPELL_CHAIN_LIGHTNING:
+            case SPELL_GLACIATE:
             case SPELL_POLAR_VORTEX:
+            case SPELL_SHATTER:
+            case SPELL_ORB_OF_ELECTRICITY:
+            case SPELL_CHAIN_LIGHTNING:
             case SPELL_LEGENDARY_DESTRUCTION:
             case SPELL_SUMMON_ILLUSION:
             case SPELL_SPELLFORGED_SERVITOR:
@@ -2476,25 +2554,31 @@ int exper_value(const monster& mon, bool real, bool legacy)
                 diff += 20;
                 break;
 
-            case SPELL_LIGHTNING_BOLT:
-            case SPELL_STICKY_FLAME_RANGE:
-            case SPELL_MINDBURST:
+            case SPELL_VITRIFY:
             case SPELL_BANISHMENT:
-            case SPELL_LEHUDIBS_CRYSTAL_SPEAR:
-            case SPELL_IRON_SHOT:
+            case SPELL_FAKE_MARA_SUMMON:
+            case SPELL_PYRE_ARROW:
+            case SPELL_MINDBURST:
             case SPELL_IOOD:
             case SPELL_FIREBALL:
-            case SPELL_AGONY_RANGE:
+            case SPELL_PLASMA_BEAM:
+            case SPELL_IRON_SHOT:
+            case SPELL_BOMBARD:
+            case SPELL_LEHUDIBS_CRYSTAL_SPEAR:
             case SPELL_LRD:
+            case SPELL_LIGHTNING_BOLT:
+            case SPELL_CONJURE_BALL_LIGHTNING:
+            case SPELL_MARCH_OF_SORROWS:
+            case SPELL_AGONY:
             case SPELL_DIG:
-            case SPELL_FAKE_MARA_SUMMON:
                 diff += 10;
                 break;
 
-            case SPELL_HAUNT:
             case SPELL_SUMMON_DRAGON:
             case SPELL_SUMMON_HORRIBLE_THINGS:
+            case SPELL_HAUNT:
             case SPELL_PLANEREND:
+            case SPELL_MALIGN_GATEWAY:
             case SPELL_SUMMON_EMPEROR_SCORPIONS:
                 diff += 7;
                 break;
@@ -2805,14 +2889,13 @@ void define_monster(monster& mons, bool friendly)
 
     switch (mcls)
     {
+    // Please keep describe.cc in sync if you change abominations.
     case MONS_ABOMINATION_SMALL:
         hd = 4 + random2(4);
-        mons.props[MON_SPEED_KEY] = 7 + random2avg(9, 2);
         break;
 
     case MONS_ABOMINATION_LARGE:
         hd = 8 + random2(4);
-        mons.props[MON_SPEED_KEY] = 6 + random2avg(7, 2);
         break;
 
     case MONS_SLIME_CREATURE:
@@ -2951,6 +3034,16 @@ void define_monster(monster& mons, bool friendly)
         ghost_demon ghost;
         mons.set_ghost(ghost);
         break;
+    }
+
+    case MONS_INUGAMI:
+    {
+        ghost_demon ghost;
+        mons.set_ghost(ghost);
+        mons.inugami_init();
+        // this does not finish setting up the inugami! See
+        // `cast_call_canine_familiar` for where the ghost_demon details are
+        // finalized.
     }
 
     default:
@@ -3384,7 +3477,7 @@ mon_attitude_type mons_attitude(const monster& m)
 
 bool mons_is_confused(const monster& m, bool class_too)
 {
-    return (m.has_ench(ENCH_CONFUSION) || m.has_ench(ENCH_MAD))
+    return (m.has_ench(ENCH_CONFUSION) || m.has_ench(ENCH_MAD) || m.sleepwalking())
            && (class_too || !mons_class_flag(m.type, M_CONFUSED));
 }
 
@@ -3920,10 +4013,13 @@ bool monster_senior(const monster& m1, const monster& m2, bool fleeing)
     // Let all related monsters (all demons are 'related') push past ones that
     // are weaker at all. Unrelated ones have to be quite a bit stronger, to
     // reduce excessive swapping and because HD correlates only weakly with
-    // monster strength.
+    // monster strength - but still give a small chance for slightly-higher
+    // HD monsters to swap, to discourage ratscumming.
+    const int hd1 = m1.get_hit_dice();
+    const int hd2 = m2.get_hit_dice();
     return related && fleeing
-           || related && m1.get_hit_dice() > m2.get_hit_dice()
-           || m1.get_hit_dice() > m2.get_hit_dice() + 5;
+           || related && hd1 > hd2
+           || hd1 > hd2 + min(5, random2(11));
 }
 
 bool mons_class_can_pass(monster_type mc, const dungeon_feature_type grid)
@@ -4049,10 +4145,7 @@ mon_inv_type item_to_mslot(const item_def &item)
     case OBJ_WANDS:
         return MSLOT_WAND;
     case OBJ_BOOKS:
-    case OBJ_SCROLLS:
-        return MSLOT_SCROLL;
-    case OBJ_POTIONS:
-        return MSLOT_POTION;
+    case OBJ_TALISMANS:
     case OBJ_MISCELLANY:
         return MSLOT_MISCELLANY;
     case OBJ_GOLD:
@@ -4486,6 +4579,7 @@ string do_mon_str_replacements(const string &in_msg, const monster& mons,
         "squeals",
         "roars",
         "rustles",      // dubious
+        "squeaks",
         "buggily says", // NUM_SHOUTS
         "breathes",     // S_VERY_SOFT
         "whispers",     // S_SOFT
@@ -5010,16 +5104,6 @@ bool mons_is_recallable(const actor* caller, const monster& targ)
            && mons_class_is_threatening(targ.type);
 }
 
-vector<monster* > get_on_level_followers()
-{
-    vector<monster* > mon_list;
-    for (monster_iterator mi; mi; ++mi)
-        if (mons_is_recallable(&you, **mi) && mi->foe == MHITYOU)
-            mon_list.push_back(*mi);
-
-    return mon_list;
-}
-
 bool mons_stores_tracking_data(const monster& mons)
 {
     return mons.type == MONS_THORN_HUNTER
@@ -5071,7 +5155,11 @@ bool mons_is_player_shadow(const monster& mon)
 bool mons_has_attacks(const monster& mon, bool allow_damageless)
 {
     const mon_attack_def attk = mons_attack_spec(mon, 0);
-    return attk.type != AT_NONE && (allow_damageless || attk.damage > 0);
+    return attk.type != AT_NONE
+           && (attk.type != AT_WEAP_ONLY || mon.weapon(0))
+           && (allow_damageless
+               || attk.damage > 0
+               || (attk.type == AT_WEAP_ONLY && mon.weapon(0)));
 }
 
 // The default suitable() function for choose_random_nearby_monster().
@@ -5349,7 +5437,6 @@ int max_mons_charge(monster_type m)
     switch (m)
     {
         case MONS_ORB_SPIDER:
-        case MONS_FLOATING_EYE:
             return 1;
         default:
             return 0;

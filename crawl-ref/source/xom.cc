@@ -94,25 +94,26 @@ static bool _action_is_bad(xom_event_type action)
 static const vector<spell_type> _xom_random_spells =
 {
     SPELL_SUMMON_SMALL_MAMMAL,
-    SPELL_CALL_CANINE_FAMILIAR,
+    SPELL_FUGUE_OF_THE_FALLEN,
     SPELL_OLGREBS_TOXIC_RADIANCE,
     SPELL_SUMMON_ICE_BEAST,
+    SPELL_ANIMATE_ARMOUR,
     SPELL_LEDAS_LIQUEFACTION,
     SPELL_CAUSE_FEAR,
+    SPELL_BATTLESPHERE,
     SPELL_INTOXICATE,
     SPELL_SUMMON_MANA_VIPER,
-    SPELL_STATUE_FORM,
     SPELL_SUMMON_CACTUS,
     SPELL_DISPERSAL,
     SPELL_ENGLACIATION,
     SPELL_DEATH_CHANNEL,
     SPELL_SUMMON_HYDRA,
     SPELL_MONSTROUS_MENAGERIE,
+    SPELL_MALIGN_GATEWAY,
     SPELL_DISCORD,
     SPELL_DISJUNCTION,
     SPELL_SUMMON_HORRIBLE_THINGS,
     SPELL_SUMMON_DRAGON,
-    SPELL_NECROMUTATION,
     SPELL_CHAIN_OF_CHAOS
 };
 
@@ -478,45 +479,6 @@ static bool _teleportation_check()
     return !you.no_tele();
 }
 
-static bool _transformation_check(const spell_type spell)
-{
-    transformation tran = transformation::none;
-    switch (spell)
-    {
-    case SPELL_BEASTLY_APPENDAGE:
-        tran = transformation::appendage;
-        break;
-    case SPELL_SPIDER_FORM:
-        tran = transformation::spider;
-        break;
-    case SPELL_STATUE_FORM:
-        tran = transformation::statue;
-        break;
-    case SPELL_ICE_FORM:
-        tran = transformation::ice_beast;
-        break;
-    case SPELL_DRAGON_FORM:
-        tran = transformation::dragon;
-        break;
-    case SPELL_STORM_FORM:
-        tran = transformation::storm;
-        break;
-    case SPELL_NECROMUTATION:
-        tran = transformation::lich;
-        break;
-    default:
-        break;
-    }
-
-    if (tran == transformation::none)
-        return true;
-
-    // Check whether existing enchantments/transformations, cursed
-    // equipment or potential stat loss interfere with this
-    // transformation.
-    return transform(0, tran, true, true);
-}
-
 /// Try to choose a random player-castable spell.
 static spell_type _choose_random_spell(int sever)
 {
@@ -526,11 +488,8 @@ static spell_type _choose_random_spell(int sever)
     for (int i = 0; i < min(spellenum, (int)spell_list.size()); ++i)
     {
         const spell_type spell = spell_list[i];
-        if (!spell_is_useless(spell, true, true, true)
-             && _transformation_check(spell))
-        {
+        if (!spell_is_useless(spell, true, true, true))
             ok_spells.push_back(spell);
-        }
     }
 
     if (!ok_spells.size())
@@ -1967,16 +1926,6 @@ static void _xom_pseudo_miscast(int /*sever*/)
     {
         string str = "A monocle briefly appears over your ";
         str += random_choose("right", "left");
-        if (you.form == transformation::spider)
-        {
-            if (coinflip())
-                str += " primary";
-            else
-            {
-                str += random_choose(" front", " middle", " rear");
-                str += " secondary";
-            }
-        }
         str += " eye.";
         messages.push_back(str);
     }
@@ -2429,11 +2378,17 @@ static void _xom_cloud_trail(int /*sever*/)
     you.props[XOM_CLOUD_TRAIL_TYPE_KEY] =
         // 80% chance of a useful trail
         random_choose_weighted(20, CLOUD_CHAOS,
-                               10, CLOUD_MAGIC_TRAIL,
+                               9,  CLOUD_MAGIC_TRAIL,
                                5,  CLOUD_MIASMA,
                                5,  CLOUD_PETRIFY,
                                5,  CLOUD_MUTAGENIC,
-                               5,  CLOUD_NEGATIVE_ENERGY);
+                               4,  CLOUD_MISERY,
+                               1,  CLOUD_SALT,
+                               1,  CLOUD_BLASTMOTES);
+
+    // Need to explicitly set as non-zero. Use a clean half of the power cap.
+    if (you.props[XOM_CLOUD_TRAIL_TYPE_KEY].get_int() == CLOUD_BLASTMOTES)
+        you.props[BLASTMOTE_POWER_KEY] = 25;
 
     take_note(Note(NOTE_XOM_EFFECT, you.piety, -1, "cloud trail"), true);
 
@@ -2614,7 +2569,7 @@ static void _xom_do_banishment(bool real)
     god_speaks(GOD_XOM, _get_xom_speech("banishment").c_str());
 
     // Handles note taking, scales depth by XL
-    banished("Xom", you.experience_level);
+    banished("Xom", max(1, (you.experience_level * 5 / 4 - 13)));
     if (!real)
         _revert_banishment();
 }
@@ -3542,7 +3497,7 @@ static const map<xom_event_type, xom_event> xom_events = {
     { XOM_BAD_TORMENT, { "torment", _xom_torment, 23}},
     { XOM_BAD_CHAOS_CLOUD, { "chaos cloud", _xom_chaos_cloud, 20}},
     { XOM_BAD_BANISHMENT, { "banishment", _xom_banishment, 50}},
-    { XOM_BAD_PSEUDO_BANISHMENT, {"psuedo-banishment", _xom_pseudo_banishment,
+    { XOM_BAD_PSEUDO_BANISHMENT, {"pseudo-banishment", _xom_pseudo_banishment,
                                   10}},
 };
 

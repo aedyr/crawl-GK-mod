@@ -229,23 +229,23 @@ static void _print_version()
 #ifdef USE_TILE
     auto icon = make_shared<Image>();
     icon->set_tile(tile_def(TILEG_STARTUP_STONESOUP));
-    title_hbox->add_child(move(icon));
+    title_hbox->add_child(std::move(icon));
 #endif
 
     auto title = make_shared<Text>(formatted_string::parse_string(info));
     title->set_margin_for_sdl(0, 0, 0, 10);
-    title_hbox->add_child(move(title));
+    title_hbox->add_child(std::move(title));
 
     title_hbox->set_cross_alignment(Widget::CENTER);
     title_hbox->set_margin_for_crt(0, 0, 1, 0);
     title_hbox->set_margin_for_sdl(0, 0, 20, 0);
-    vbox->add_child(move(title_hbox));
+    vbox->add_child(std::move(title_hbox));
 
     auto scroller = make_shared<Scroller>();
     auto content = formatted_string::parse_string(feats + "\n\n" + changes);
-    auto text = make_shared<Text>(move(content));
+    auto text = make_shared<Text>(std::move(content));
     text->set_wrap_text(true);
-    scroller->set_child(move(text));
+    scroller->set_child(std::move(text));
     vbox->add_child(scroller);
 
     auto popup = make_shared<ui::Popup>(vbox);
@@ -265,7 +265,7 @@ static void _print_version()
     popup->on_layout_pop([](){ tiles.pop_ui_layout(); });
 #endif
 
-    ui::run_layout(move(popup), done);
+    ui::run_layout(std::move(popup), done);
 }
 
 void list_armour()
@@ -958,6 +958,8 @@ static void _add_formatted_keyhelp(column_composer &cols)
                          { CMD_WEAR_JEWELLERY, CMD_REMOVE_JEWELLERY });
     _add_insert_commands(cols, 0, "<red>\"</red> : amulets (<w>%</w>ut on and <w>%</w>emove)",
                          { CMD_WEAR_JEWELLERY, CMD_REMOVE_JEWELLERY });
+    _add_insert_commands(cols, 0, "<lightred>percent</lightred> : talismans (e<w>%</w>oke)",
+                         { CMD_EVOKE });
     _add_insert_commands(cols, 0, "<lightgrey>/</lightgrey> : wands (e<w>%</w>oke)",
                          { CMD_EVOKE });
 
@@ -1083,9 +1085,6 @@ static void _add_formatted_keyhelp(column_composer &cols)
 #ifdef USE_SOUND
     _add_command(cols, 1, CMD_TOGGLE_SOUND, "mute/unmute sound effects");
 #endif
-    _add_command(cols, 1, CMD_TOGGLE_TRAVEL_SPEED, "set your travel speed to your");
-    cols.add_formatted(1, "         slowest ally\n",
-                           false);
 #ifdef USE_TILE_LOCAL
     _add_insert_commands(cols, 1, "<w>%</w>/<w>%</w> : zoom out/in",
                         { CMD_ZOOM_OUT, CMD_ZOOM_IN });
@@ -1256,6 +1255,10 @@ static void _add_formatted_hints_help(column_composer &cols)
                          "amulets (<w>%</w>ut on and <w>%</w>emove)",
                          { CMD_WEAR_JEWELLERY, CMD_REMOVE_JEWELLERY });
     _add_insert_commands(cols, 1,
+                         "<console><lightred>percent</lightred> : </console>"
+                         "talismans (e<w>%</w>oke)",
+                         { CMD_EVOKE });
+    _add_insert_commands(cols, 1,
                          "<console><lightgrey>/</lightgrey> : </console>"
                          "wands (e<w>%</w>oke)",
                          { CMD_EVOKE });
@@ -1418,7 +1421,7 @@ private:
                 // disable these if there's no character to view
                 if (!crawl_state.game_started)
                     return maybe_bool::maybe;
-                // falltrough
+                // fallthrough
             case CK_ESCAPE: case '/': case 'q': case 'v': case '!':
                 // exit the UI, these help screens are activated outside of
                 // the scroller popup

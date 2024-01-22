@@ -272,6 +272,9 @@ void get_class_hotkeys(const int type, vector<char> &glyphs)
         glyphs.push_back('\\');
         break;
 #endif
+    case OBJ_TALISMANS:
+        glyphs.push_back('%');
+        break;
     case OBJ_MISCELLANY:
         glyphs.push_back('}');
         break;
@@ -393,6 +396,7 @@ static bool _item_is_permadrop_candidate(const item_def &item)
     if (item_type_unknown(item))
         return false;
     return item.base_type == OBJ_MISCELLANY
+        || item.base_type == OBJ_TALISMANS
         || is_stackable_item(item)
         || item_type_has_ids(item.base_type);
 }
@@ -523,6 +527,8 @@ string no_selectables_message(int item_selector)
     case OSEL_LAUNCHING:
         return "You aren't carrying any items that might be thrown or fired.";
     case OSEL_EVOKABLE:
+        if (you.get_mutation_level(MUT_NO_ARTIFICE)) // iffy
+            return "You cannot evoke magical items.";
         return "You aren't carrying any items that you can evoke.";
     case OSEL_CURSED_WORN:
         return "None of your equipped items are cursed.";
@@ -564,7 +570,7 @@ void InvMenu::load_inv_items(int item_selector, int excluded_slot,
     vector<const item_def *> tobeshown;
     _get_inv_items_to_show(tobeshown, item_selector, excluded_slot);
 
-    load_items(tobeshown, procfn);
+    load_items(tobeshown, procfn, 'a', true, true);
 
     if (!item_count())
         set_title(no_selectables_message(item_selector));
@@ -652,8 +658,8 @@ bool InvEntry::get_tiles(vector<tile_def>& tileset) const
     if (!Options.tile_menu_icons)
         return false;
 
-    // Runes + orb of zot have a special uncollected tile
-    if (quantity <= 0 && (item->base_type != OBJ_RUNES && item->base_type != OBJ_ORBS))
+    // Runes + gems + orb of zot have a special uncollected tile
+    if (quantity <= 0 && !item_is_collectible(*item))
         return false;
 
     return get_tiles_for_item(*item, tileset, show_background);
@@ -736,7 +742,7 @@ bool sort_item_identified(const InvEntry *a)
 bool sort_item_charged(const InvEntry *a)
 {
     return a->item->base_type != OBJ_WANDS
-           || !item_is_evokable(*(a->item));
+           || !item_ever_evokable(*(a->item));
 }
 
 static bool _compare_invmenu_items(const InvEntry *a, const InvEntry *b,
@@ -840,34 +846,38 @@ FixedVector<int, NUM_OBJECT_CLASSES> inv_order(
     OBJ_RODS,
 #endif
     OBJ_JEWELLERY,
+    OBJ_TALISMANS,
     OBJ_WANDS,
     OBJ_SCROLLS,
     OBJ_POTIONS,
-    OBJ_BOOKS,
     OBJ_MISCELLANY,
 #if TAG_MAJOR_VERSION == 34
     OBJ_FOOD,
 #endif
-    // These four can't actually be in your inventory.
+    // These five can't actually be in your inventory.
     OBJ_CORPSES,
+    OBJ_BOOKS,
     OBJ_RUNES,
+    OBJ_GEMS,
     OBJ_ORBS,
     OBJ_GOLD);
 
 menu_letter InvMenu::load_items(const vector<item_def>& mitems,
                                 function<MenuEntry* (MenuEntry*)> procfn,
-                                menu_letter ckey, bool sort)
+                                menu_letter ckey, bool sort, bool subkeys)
 {
     vector<const item_def*> xlatitems;
     for (const item_def &item : mitems)
         xlatitems.push_back(&item);
-    return load_items(xlatitems, procfn, ckey, sort);
+    return load_items(xlatitems, procfn, ckey, sort, subkeys);
 }
 
 menu_letter InvMenu::load_items(const vector<const item_def*> &mitems,
                                 function<MenuEntry* (MenuEntry*)> procfn,
-                                menu_letter ckey, bool sort)
+                                menu_letter ckey, bool sort, bool subkeys)
 {
+    subkeys |= is_set(MF_MULTISELECT); // XXX Can the caller do this?
+
     FixedVector< int, NUM_OBJECT_CLASSES > inv_class(0);
     for (const item_def * const mitem : mitems)
         inv_class[mitem->base_type]++;
@@ -876,6 +886,18 @@ menu_letter InvMenu::load_items(const vector<const item_def*> &mitems,
     const menu_sort_condition *cond = nullptr;
     if (sort)
         cond = find_menu_sort_condition();
+
+    string select_all;
+    if (subkeys)
+    {
+        // Mention the class selection shortcuts.
+        if (is_set(MF_SECONDARY_SCROLL))
+            select_all = "go to first";
+        else if (is_set(MF_MULTISELECT))
+            select_all = "select all";
+        else
+            select_all = "select first";
+    }
 
     for (int obj = 0; obj < NUM_OBJECT_CLASSES; ++obj)
     {
@@ -886,8 +908,7 @@ menu_letter InvMenu::load_items(const vector<const item_def*> &mitems,
 
         string subtitle = item_class_name(i);
 
-        // Mention the class selection shortcuts.
-        if (is_set(MF_MULTISELECT))
+        if (subkeys)
         {
             vector<char> glyphs;
             get_class_hotkeys(i, glyphs);
@@ -897,7 +918,7 @@ menu_letter InvMenu::load_items(const vector<const item_def*> &mitems,
                 const string str = "Magical Staves ";
                 subtitle += string(strwidth(str) - strwidth(subtitle),
                                    ' ');
-                subtitle += "(select all with <w>";
+                subtitle += "("+select_all+" with <w>";
                 for (char gly : glyphs)
                     subtitle += gly;
                 subtitle += "</w><blue>)";
@@ -914,6 +935,8 @@ menu_letter InvMenu::load_items(const vector<const item_def*> &mitems,
                 continue;
 
             InvEntry * const ie = new InvEntry(*mitem);
+            if (!subkeys)
+                ie->hotkeys.resize(1);
             if (mitem->sub_type == get_max_subtype(mitem->base_type))
                 forced_first = ie;
             else
@@ -1051,6 +1074,8 @@ const char *item_class_name(int type, bool terse)
         case OBJ_MISCELLANY: return "Miscellaneous";
         case OBJ_CORPSES:    return "Carrion";
         case OBJ_RUNES:      return "Runes of Zot";
+        case OBJ_GEMS:       return "Ancient Gems";
+        case OBJ_TALISMANS:  return "Talismans";
         }
     }
     return "";
@@ -1140,7 +1165,7 @@ bool item_is_selected(const item_def &i, int selector)
         return item_is_wieldable(i);
 
     case OSEL_EVOKABLE:
-        return item_is_evokable(i);
+        return item_ever_evokable(i);
 
     case OSEL_ENCHANTABLE_ARMOUR:
         return is_enchantable_armour(i, true);
@@ -1762,7 +1787,9 @@ bool check_warning_inscriptions(const item_def& item,
             prompt += " while about to teleport";
         }
         prompt += "?";
-        if (penance)
+        if (god_despises_item(item, you.religion))
+            prompt += " You'd be excommunicated if you did!";
+        else if (penance)
             prompt += " This could place you under penance!";
         return yesno(prompt.c_str(), false, 'n')
                && check_old_item_warning(item, oper);

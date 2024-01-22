@@ -17,6 +17,7 @@
 #include "env.h"
 #include "fight.h"
 #include "files.h"
+#include "fineff.h"
 #include "fprop.h"
 #include "god-abil.h"
 #include "god-prayer.h"
@@ -331,7 +332,6 @@ static const vector<god_passive> god_passives[] =
     {
         { -1, passive_t::want_curses, "prefer cursed items" },
         {  0, passive_t::detect_portals, "sense portals" },
-        {  0, passive_t::auto_map, "have improved mapping abilities" },
         {  0, passive_t::detect_montier, "sense threats" },
         {  0, passive_t::detect_items, "sense items" },
         {  0, passive_t::bondage_skill_boost,
@@ -340,6 +340,8 @@ static const vector<god_passive> god_passives[] =
         {  2, passive_t::sinv, "are NOW clear of vision" },
         {  3, passive_t::clarity, "are NOW clear of mind" },
         {  4, passive_t::avoid_traps, "avoid traps" },
+        {  4, passive_t::scrying,
+              "reveal the structure of the nearby dungeon" },
     },
 
     // Dithmenos
@@ -356,7 +358,6 @@ static const vector<god_passive> god_passives[] =
 
     // Gozag
     {
-        { -1, passive_t::detect_gold, "detect gold" },
         {  0, passive_t::goldify_corpses,
               "GOD NOW turns all corpses to gold" },
         {  0, passive_t::gold_aura, "have a gold aura" },
@@ -626,9 +627,9 @@ bool god_id_item(item_def& item, bool silent)
 
     if (have_passive(passive_t::identify_items))
     {
-        // Don't identify runes or the orb, since this has no gameplay purpose
+        // Don't identify runes, gems, or the orb, since this has no purpose
         // and might mess up other things.
-        if (item.base_type == OBJ_RUNES || item_is_orb(item))
+        if (item_is_collectible(item))
             return false;
 
         if ((item.base_type == OBJ_JEWELLERY || item.base_type == OBJ_STAVES)
@@ -782,10 +783,41 @@ int ash_skill_boost(skill_type sk, int scale)
     return min(level, MAX_SKILL_LEVEL * scale);
 }
 
-void gozag_detect_level_gold(bool count)
+void ash_scrying()
+{
+    if (have_passive(passive_t::scrying))
+    {
+        magic_mapping(LOS_MAX_RANGE, 100, true, true, false, false, false,
+                      you.pos());
+    }
+}
+
+void gozag_move_level_gold_to_top()
+{
+    if (you_worship(GOD_GOZAG))
+    {
+        for (rectangle_iterator ri(0); ri; ++ri)
+            gozag_move_gold_to_top(*ri);
+    }
+}
+
+void gozag_move_gold_to_top(const coord_def p)
+{
+    for (int gold = env.igrid(p); gold != NON_ITEM;
+         gold = env.item[gold].link)
+    {
+        if (env.item[gold].base_type == OBJ_GOLD)
+        {
+            unlink_item(gold);
+            move_item_to_grid(&gold, p, true);
+            break;
+        }
+    }
+}
+
+void gozag_count_level_gold()
 {
     ASSERT(you.on_current_level);
-    vector<item_def *> gold_piles;
     vector<coord_def> gold_places;
     int gold = 0;
     for (rectangle_iterator ri(0); ri; ++ri)
@@ -795,38 +827,17 @@ void gozag_detect_level_gold(bool count)
             if (j->base_type == OBJ_GOLD && !(j->flags & ISFLAG_UNOBTAINABLE))
             {
                 gold += j->quantity;
-                gold_piles.push_back(&(*j));
                 gold_places.push_back(*ri);
             }
         }
     }
 
-    if (!player_in_branch(BRANCH_ABYSS) && count)
+    if (!player_in_branch(BRANCH_ABYSS))
         you.attribute[ATTR_GOLD_GENERATED] += gold;
 
-    if (have_passive(passive_t::detect_gold))
-    {
-        for (unsigned int i = 0; i < gold_places.size(); i++)
-        {
-            int dummy = gold_piles[i]->index();
-            coord_def &pos = gold_places[i];
-            unlink_item(dummy);
-            move_item_to_grid(&dummy, pos, true);
-            if ((!env.map_knowledge(pos).item()
-                 || env.map_knowledge(pos).item()->base_type != OBJ_GOLD
-                 && you.visible_igrd(pos) != NON_ITEM))
-            {
-                env.map_knowledge(pos).set_item(
-                        get_item_known_info(*gold_piles[i]),
-                        !!env.map_knowledge(pos).item());
-                env.map_knowledge(pos).flags |= MAP_DETECTED_ITEM;
-#ifdef USE_TILE
-                // force an update for gold generated during Abyss shifts
-                tiles.update_minimap(pos);
-#endif
-            }
-        }
-    }
+    if (you_worship(GOD_GOZAG))
+        for (auto pos : gold_places)
+            gozag_move_gold_to_top(pos);
 }
 
 int qazlal_sh_boost(int piety)
@@ -1211,6 +1222,7 @@ void dithmenos_shadow_spell(bolt* orig_beam, spell_type spell)
     const coord_def target = orig_beam->target;
 
     if (orig_beam->target.origin()
+        || spell == SPELL_BOULDER
         || (orig_beam->is_enchantment() && !is_valid_mon_spell(spell))
         || orig_beam->flavour == BEAM_CHARM
            && monster_at(target) && monster_at(target)->friendly()
@@ -1243,15 +1255,14 @@ void dithmenos_shadow_spell(bolt* orig_beam, spell_type spell)
     beem.target = target;
     beem.aimed_at_spot = orig_beam->aimed_at_spot;
 
-    mprf(MSGCH_FRIEND_SPELL, "%s mimicks your spell!",
+    mprf(MSGCH_FRIEND_SPELL, "%s mimics your spell!",
          mon->name(DESC_THE).c_str());
     mons_cast(mon, beem, shadow_spell, MON_SPELL_WIZARD, false);
 
     shadow_monster_reset(mon);
 }
 
-static void _wu_jian_trigger_serpents_lash(const coord_def& old_pos,
-                                           bool wall_jump)
+void wu_jian_trigger_serpents_lash(bool wall_jump, const coord_def& old_pos)
 {
     if (you.attribute[ATTR_SERPENTS_LASH] == 0)
        return;
@@ -1270,6 +1281,7 @@ static void _wu_jian_trigger_serpents_lash(const coord_def& old_pos,
         you.attribute[ATTR_SERPENTS_LASH] -= wall_jump ? 2 : 1;
         you.redraw_status_lights = true;
         update_turn_count();
+        fire_final_effects();
     }
 
     if (you.attribute[ATTR_SERPENTS_LASH] == 0)
@@ -1588,7 +1600,7 @@ bool wu_jian_post_move_effects(bool did_wall_jump,
         attacked = _wu_jian_trigger_martial_arts(old_pos, you.pos());
 
     if (you.turn_is_over)
-        _wu_jian_trigger_serpents_lash(old_pos, did_wall_jump);
+        wu_jian_trigger_serpents_lash(did_wall_jump, old_pos);
 
     return attacked;
 }

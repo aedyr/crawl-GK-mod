@@ -52,21 +52,37 @@ tree_petrified2
 tree_petrified3
 
 tree_demonic1 DNGN_DEMONIC_TREE
+%syn DNGN_DEMONIC_TREE_1
 tree_demonic2
+%syn DNGN_DEMONIC_TREE_2
 tree_demonic3
+%syn DNGN_DEMONIC_TREE_3
 tree_demonic4
+%syn DNGN_DEMONIC_TREE_4
 tree_demonic5
+%syn DNGN_DEMONIC_TREE_5
 tree_demonic6
+%syn DNGN_DEMONIC_TREE_6
 tree_demonic7
+%syn DNGN_DEMONIC_TREE_7
 tree_demonic8
+%syn DNGN_DEMONIC_TREE_8
 tree_demonic9
+%syn DNGN_DEMONIC_TREE_9
 tree_demonic10
+%syn DNGN_DEMONIC_TREE_10
 tree_demonic11
+%syn DNGN_DEMONIC_TREE_11
 tree_demonic12
+%syn DNGN_DEMONIC_TREE_12
 tree_demonic13
+%syn DNGN_DEMONIC_TREE_13
 tree_demonic14
+%syn DNGN_DEMONIC_TREE_14
 tree_demonic15
+%syn DNGN_DEMONIC_TREE_15
 tree_demonic16
+%syn DNGN_DEMONIC_TREE_16
 
 # We put the berserk icon on the dngn tilesheet for rendering purposes.
 %sdir misc/icons
@@ -174,9 +190,10 @@ vgate_broken_down_crypt DNGN_VGATE_BROKEN_DOWN_CRYPT
 ## Alternate doors for vaults, etc. Should be in the order listed above for
 ## doors which also provide gateways; otherwise detected, closed, open, broken,
 ## or closed, open, broken.
-fleshy_orifice_closed DNGN_FLESHY_ORIFICE
-fleshy_orifice_open
-fleshy_orifice_ruined
+%sdir dngn/vaults
+cigotuvi_door_closed DNGN_FLESHY_ORIFICE
+cigotuvi_door_open
+cigotuvi_door_ruined
 
 # Place new door tiles before this point, otherwise they can't be used as
 # door overrides.
@@ -260,6 +277,10 @@ crumbled_column_4
 crumbled_column_5
 crumbled_column_6
 
+# depths statues, damaged or not
+depths_column DEPTHS_COLUMN
+depths_crumbled_column DEPTHS_CRUMBLED_COLUMN
+
 # Statues in Dis
 statue_iron DNGN_STATUE_IRON
 
@@ -323,6 +344,7 @@ teleport_permanent DNGN_TRAP_TELEPORT_PERMANENT
 zot DNGN_TRAP_ZOT
 passage_of_golubria DNGN_TRAP_GOLUBRIA
 pressure_plate DNGN_TRAP_PLATE
+binding_sigil DNGN_BINDING_SIGIL
 
 # order matters (tilepick.c tileidx_feature())
 cobweb_none_0 DNGN_TRAP_WEB
@@ -462,6 +484,8 @@ sewer_portal DNGN_PORTAL_SEWER
 sewer_portal_rusted DNGN_PORTAL_SEWER_RUSTED
 ice_cave_portal DNGN_PORTAL_ICE_CAVE
 ice_cave_gone DNGN_PORTAL_ICE_CAVE_GONE
+glacial_chasm_portal DNGN_PORTAL_GLACIAL_CHASM
+glacial_chasm_gone DNGN_PORTAL_GLACIAL_CHASM_GONE
 wizlab_portal0 DNGN_PORTAL_WIZARD_LAB
 wizlab_portal1
 wizlab_portal2
@@ -539,9 +563,10 @@ jiyva11
 fedhas DNGN_ALTAR_FEDHAS
 cheibriados DNGN_ALTAR_CHEIBRIADOS
 ashenzari DNGN_ALTAR_ASHENZARI
-dithmenos DNGN_ALTAR_DITHMENOS
+dithmenos1 DNGN_ALTAR_DITHMENOS
 dithmenos2
 dithmenos3
+dithmenos4
 gozag0 DNGN_ALTAR_GOZAG
 gozag1
 gozag2
@@ -735,6 +760,7 @@ monster_threat_trivial THREAT_TRIVIAL
 monster_threat_easy THREAT_EASY
 monster_threat_tough THREAT_TOUGH
 monster_threat_nasty THREAT_NASTY
+monster_threat_unusual THREAT_UNUSUAL
 
 travel_exclusion TRAVEL_EXCLUSION_BG
 travel_exclusion_centre TRAVEL_EXCLUSION_CENTRE_BG

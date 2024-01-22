@@ -8,6 +8,7 @@
 
 #include "fineff.h"
 
+#include "act-iter.h"
 #include "beam.h"
 #include "bloodspatter.h"
 #include "coordit.h"
@@ -19,6 +20,7 @@
 #include "env.h"
 #include "fight.h"
 #include "god-abil.h"
+#include "god-wrath.h" // lucy_check_meddling
 #include "libutil.h"
 #include "losglobal.h"
 #include "melee-attack.h"
@@ -29,8 +31,10 @@
 #include "mon-cast.h"
 #include "mon-death.h"
 #include "mon-place.h"
+#include "movement.h"
 #include "ouch.h"
 #include "religion.h"
+#include "spl-damage.h"
 #include "spl-summoning.h"
 #include "state.h"
 #include "stringutil.h"
@@ -269,6 +273,7 @@ void trample_follow_fineff::fire()
         const coord_def old_pos = attack->pos();
         attack->move_to_pos(posn);
         attack->apply_location_effects(old_pos);
+        attack->did_deliberate_movement();
     }
 }
 
@@ -341,7 +346,7 @@ void trj_spawn_fineff::fire()
         ? attitude_creation_behavior(trj->as_monster()->attitude)
         : BEH_HOSTILE;
 
-    // No permanent friendly jellies from an enslaved TRJ.
+    // No permanent friendly jellies from a charmed TRJ.
     if (spawn_beh == BEH_FRIENDLY && !crawl_state.game_is_arena())
         return;
 
@@ -575,7 +580,7 @@ void explosion_fineff::fire()
 
     if (typ == EXPLOSION_FINEFF_CONCUSSION)
     {
-        for (adjacent_iterator ai(beam.target); ai; ++ai)
+        for (fair_adjacent_iterator ai(beam.target); ai; ++ai)
         {
             actor *act = actor_at(*ai);
             if (!act
@@ -625,7 +630,7 @@ void kirke_death_fineff::fire()
 
     // Revert the player last
     if (you.form == transformation::pig)
-        untransform();
+        return_to_default_form();
 }
 
 void rakshasa_clone_fineff::fire()
@@ -699,39 +704,78 @@ void infestation_death_fineff::fire()
     }
 }
 
+// XXX: This entire method feels like a hack. But normal summon cap functions
+// won't work because simulacra don't use ENCH_ABJ, and even if it DID work, it
+// would probably make the simulacra disappear in a puff of smoke instead of
+// collapsing in the normal fashion.
+static void _expire_player_simulacra()
+{
+    vector <monster*> simul;
+    for (monster_iterator mi; mi; ++mi)
+    {
+        // We're looking only for simulacra that are friendly to the player and
+        // created by the Sculpt Simulacrum spell.
+        if (mi->type == MONS_SIMULACRUM && mi->friendly()
+            && mi->has_ench(ENCH_SUMMON)
+            && mi->get_ench(ENCH_SUMMON).degree == SPELL_SIMULACRUM)
+        {
+            simul.push_back(*mi);
+        }
+    }
+
+    // If we have too many, expire the oldest.
+    // (Maybe it should use some other logic, like weakest or injured?)
+    if (simul.size() > 4)
+        simul[0]->del_ench(ENCH_FAKE_ABJURATION);
+}
+
 void make_derived_undead_fineff::fire()
 {
-    if (monster *undead = create_monster(mg))
+    monster *undead = create_monster(mg);
+    if (!undead)
+        return;
+
+    if (!message.empty() && you.can_see(*undead))
+        mpr(message);
+
+    // Handle cap for player sculpt simulacrum
+    if (mg.summon_type == SPELL_SIMULACRUM)
+        _expire_player_simulacra();
+
+    // If the original monster has been levelled up, its HD might be
+    // different from its class HD, in which case its HP should be
+    // rerolled to match.
+    if (undead->get_experience_level() != experience_level)
     {
-        if (!message.empty() && you.can_see(*undead))
-            mpr(message);
-
-        // If the original monster has been levelled up, its HD might be
-        // different from its class HD, in which case its HP should be
-        // rerolled to match.
-        if (undead->get_experience_level() != experience_level)
-        {
-            undead->set_hit_dice(max(experience_level, 1));
-            roll_zombie_hp(undead);
-        }
-
-        // Fix up custom names
-        if (!mg.mname.empty())
-            name_zombie(*undead, mg.base_type, mg.mname);
-
-        if (mg.god != GOD_YREDELEMNUL)
-        {
-            if (undead->type == MONS_ZOMBIE)
-                undead->props[ANIMATE_DEAD_KEY] = true;
-            else
-            {
-                int dur = undead->type == MONS_SKELETON ? 3 : 5;
-                undead->add_ench(mon_enchant(ENCH_FAKE_ABJURATION, dur));
-            }
-        }
-        if (!agent.empty())
-            mons_add_blame(undead, "animated by " + agent);
+        undead->set_hit_dice(max(experience_level, 1));
+        roll_zombie_hp(undead);
     }
+
+    // Fix up custom names
+    if (!mg.mname.empty())
+        name_zombie(*undead, mg.base_type, mg.mname);
+
+    if (mg.god != GOD_YREDELEMNUL)
+    {
+        if (undead->type == MONS_ZOMBIE)
+            undead->props[ANIMATE_DEAD_KEY] = true;
+        else
+        {
+            int dur = undead->type == MONS_SKELETON ? 3 : 5;
+
+            // Sculpt Simulacrum has a shorter duration than Bind Soul simulacra
+            if (spell == SPELL_SIMULACRUM)
+                dur = 3;
+
+            undead->add_ench(mon_enchant(ENCH_FAKE_ABJURATION, dur));
+        }
+    }
+    if (!agent.empty())
+        mons_add_blame(undead, "animated by " + agent);
+
+    // Tag so that we can see which undead came from which spell
+    if (spell != SPELL_NO_SPELL)
+        undead->add_ench(mon_enchant(ENCH_SUMMON, spell));
 }
 
 const actor *mummy_death_curse_fineff::fixup_attacker(const actor *a)
@@ -895,6 +939,17 @@ void spectral_weapon_fineff::fire()
     mons->summoner = atkr->mid;
     mons->behaviour = BEH_SEEK; // for display
     atkr->props[SPECTRAL_WEAPON_KEY].get_int() = mons->mid;
+}
+
+void lugonu_meddle_fineff::fire() {
+    lucy_check_meddling();
+}
+
+void jinxbite_fineff::fire()
+{
+    actor* defend = defender();
+    if (defend && defend->alive())
+        attempt_jinxbite_hit(*defend);
 }
 
 // Effects that occur after all other effects, even if the monster is dead.

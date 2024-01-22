@@ -20,12 +20,11 @@ enum unarmed_attack_type
     UNAT_BITE,
     UNAT_PSEUDOPODS,
     UNAT_TENTACLES,
+    UNAT_MAW,
     UNAT_FIRST_ATTACK = UNAT_CONSTRICT,
-    UNAT_LAST_ATTACK = UNAT_TENTACLES,
+    UNAT_LAST_ATTACK = UNAT_MAW,
     NUM_UNARMED_ATTACKS,
 };
-
-const int UC_FORM_TO_HIT_BONUS = 5;
 
 class melee_attack : public attack
 {
@@ -36,9 +35,12 @@ public:
 
     list<actor*> cleave_targets;
     bool         cleaving;        // additional attack from cleaving
-    bool         is_riposte;      // long blade retaliation attack
+    bool         is_multihit;     // quick blade follow-up attack
+    bool         is_riposte;      // fencers' retaliation attack
     bool         is_projected;    // projected weapon spell attack
     int          charge_pow;      // electric charge bonus damage
+    bool         never_cleave;    // if this attack shouldn't trigger cleave
+                                  // followups, but still do 100% damage
     wu_jian_attack_type wu_jian_attack;
     int wu_jian_number_of_targets;
     coord_def attack_position;
@@ -52,6 +54,8 @@ public:
     bool attack();
     int calc_to_hit(bool random) override;
     int post_roll_to_hit_modifiers(int mhit, bool random) override;
+
+    bool would_prompt_player();
 
     static void chaos_affect_actor(actor *victim);
 
@@ -113,6 +117,7 @@ private:
 
     /* Brand / Attack Effects */
     bool do_knockback(bool slippery);
+    bool do_drag();
 
     /* Output methods */
     void set_attack_verb(int damage) override;
@@ -155,7 +160,7 @@ private:
     void player_warn_miss();
     void player_weapon_upsets_god();
     bool bad_attempt();
-    bool player_unrand_bad_attempt();
+    bool player_unrand_bad_attempt(bool check_only = false);
     void _defender_die();
 
     // Added in, were previously static methods of fight.cc
@@ -167,4 +172,5 @@ private:
     bool can_reach();
 };
 
-string aux_attack_desc(mutation_type mut);
+string aux_attack_desc(unarmed_attack_type unat, int force_damage = -1);
+string mut_aux_attack_desc(mutation_type mut);

@@ -427,6 +427,8 @@ void DungeonCellBuffer::pack_background(int x, int y, const packed_cell &cell)
                     m_buf_feat.add(TILE_THREAT_TOUGH, x, y);
                 else if (threat_flag == TILE_FLAG_NASTY)
                     m_buf_feat.add(TILE_THREAT_NASTY, x, y);
+                else if (threat_flag == TILE_FLAG_UNUSUAL)
+                    m_buf_feat.add(TILE_THREAT_UNUSUAL, x, y);
 
                 if (cell.is_highlighted_summoner)
                     m_buf_feat.add(TILE_HALO_SUMMONER, x, y);
@@ -480,7 +482,7 @@ static map<tileidx_t, int> status_icon_sizes = {
     { TILEI_WEAKENED,       6 },
     { TILEI_WATERLOGGED,    10 },
     { TILEI_STILL_WINDS,    10 },
-    { TILEI_SIMULACRUM,     8 },
+    { TILEI_GHOSTLY,        8 },
     { TILEI_ANTIMAGIC,      10 },
     { TILEI_DAZED,          6 },
     { TILEI_PARTIALLY_CHARGED, 6 },
@@ -489,11 +491,16 @@ static map<tileidx_t, int> status_icon_sizes = {
     { TILEI_CONC_VENOM,     7 },
     { TILEI_REPEL_MISSILES, 10 },
     { TILEI_INJURY_BOND,    10 },
-    { TILEI_REFLECTING,     9 },
     { TILEI_TELEPORTING,    9 },
     { TILEI_RESISTANCE,     8 },
     { TILEI_BRILLIANCE,     10 },
     { TILEI_MALMUTATED,     8 },
+    { TILEI_GLOW_LIGHT,     10 },
+    { TILEI_GLOW_HEAVY,     10 },
+    { TILEI_PAIN_BOND,      11 },
+    { TILEI_BULLSEYE,       10 },
+    { TILEI_VITRIFIED,      6 },
+    { TILEI_CURSE_OF_AGONY, 10 },
 
     // These are in the bottom right, so don't need to shift.
     { TILEI_BERSERK,        FIXED_LOC_ICON },
@@ -557,7 +564,12 @@ void DungeonCellBuffer::pack_foreground(int x, int y, const packed_cell &cell)
     if (fg & TILE_FLAG_BEH_MASK)
     {
         const tileidx_t beh_flag = fg & TILE_FLAG_BEH_MASK;
-        if (beh_flag == TILE_FLAG_STAB)
+        if (beh_flag == TILE_FLAG_PARALYSED)
+        {
+            m_buf_icons.add(TILEI_PARALYSED, x, y);
+            status_shift += 12;
+        }
+        else if (beh_flag == TILE_FLAG_STAB)
         {
             m_buf_icons.add(TILEI_STAB_BRAND, x, y);
             status_shift += 12;

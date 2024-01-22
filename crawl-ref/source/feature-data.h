@@ -252,6 +252,13 @@ static feature_def feat_defs[] =
 },
 
 {
+    DNGN_MUD, "some mud", "mud",
+    DCHAR_SHALLOW_WAVY, NUM_DCHAR_TYPES,
+    COLOUR_IS(BROWN),
+    FFT_NONE, MF_FLOOR,
+},
+
+{
     DNGN_FLOOR, "floor", "floor",
     DCHAR_FLOOR, DCHAR_FLOOR_MAGIC,
     COLOUR_IS(ETC_FLOOR),
@@ -676,6 +683,13 @@ FOUNTAIN(DNGN_RUNELIGHT, "runelight", "runelight", ETC_DISJUNCTION),
     DCHAR_STAIRS_DOWN, NUM_DCHAR_TYPES,
     COLOUR_AND_MAP(LIGHTCYAN),
     FFT_NONE, MF_STAIR_BRANCH,
+},
+
+{
+    DNGN_BINDING_SIGIL, "a binding sigil", "binding_sigil",
+    DCHAR_TRAP, NUM_DCHAR_TYPES,
+    COLOUR_AND_MAP(RED),
+    FFT_NONE, MF_FLOOR,
 },
 
 };

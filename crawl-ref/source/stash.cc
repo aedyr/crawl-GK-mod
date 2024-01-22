@@ -399,8 +399,10 @@ vector<stash_search_result> Stash::matches_search(
     {
         const string s   = stash_item_name(item);
         const string ann = stash_annotate_item(STASH_LUA_SEARCH_ANNOTATE, &item);
-        if (search.matches(prefix + " " + ann + " " + s)
-            || is_dumpable_artefact(item) && search.matches(chardump_desc(item)))
+        string haystack = prefix + " " + ann + " " + s;
+        if (is_dumpable_artefact(item))
+            haystack += " " + chardump_desc(item);
+        if (search.matches(haystack))
         {
             stash_search_result res;
             res.match_type = MATCH_ITEM;
@@ -661,9 +663,9 @@ vector<stash_search_result> ShopInfo::matches_search(
         const string ann   = stash_annotate_item(STASH_LUA_SEARCH_ANNOTATE,
                                                  &item);
 
-        if (search.matches(prefix + " " + ann + " " + sname +
-                                                    " {" + shoptitle + "}")
-            || search.matches(shop_item_desc(item)))
+        string text = prefix + " " + ann + " " + sname + " {" + shoptitle + "}"
+                      + shop_item_desc(item);
+        if (search.matches(text))
         {
             stash_search_result res;
             res.match_type = MATCH_ITEM;
@@ -1178,7 +1180,8 @@ static bool _is_potentially_boring(stash_search_result res)
         && !res.in_inventory
         && (res.item.base_type == OBJ_WEAPONS
             || res.item.base_type == OBJ_ARMOUR
-            || res.item.base_type == OBJ_MISSILES)
+            || res.item.base_type == OBJ_MISSILES
+            || res.item.base_type == OBJ_TALISMANS) // TODO: also misc?
         && (item_type_known(res.item) || !item_is_branded(res.item))
         || res.match_type == MATCH_FEATURE && feat_is_trap(res.feat);
 }
@@ -1287,9 +1290,10 @@ static vector<stash_search_result> _inventory_search(const base_pattern &search)
 
         const string s   = Stash::stash_item_name(item);
         const string ann = stash_annotate_item(STASH_LUA_SEARCH_ANNOTATE, &item);
-        if (search.matches(ann + " " + s)
-            || is_dumpable_artefact(item)
-               && search.matches(chardump_desc(item)))
+        string haystack = ann + " " + s;
+        if (is_dumpable_artefact(item))
+            haystack += " " + chardump_desc(item);
+        if (search.matches(haystack))
         {
             stash_search_result res;
             res.match = s;
@@ -1450,7 +1454,9 @@ void StashTracker::search_stashes(string search_term)
     vector<stash_search_result> results;
     if (!curr_lev)
         results = _inventory_search(*search);
-    get_matching_stashes(*search, results, curr_lev);
+    // allowing offlevel stash searching is not useful in descent mode
+    get_matching_stashes(*search, results, curr_lev
+                                           || crawl_state.game_is_descent());
 
     if (results.empty())
     {
@@ -1597,7 +1603,7 @@ protected:
 
 formatted_string StashSearchMenu::calc_title()
 {
-    const int num_matches = items.size();
+    const int num_matches = item_count(false);
     const int num_alt_matches = title->quantity;
     formatted_string fs;
     fs.textcolour(title->colour);

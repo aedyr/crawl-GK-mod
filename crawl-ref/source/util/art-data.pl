@@ -34,6 +34,16 @@ my %field_type = (
     DESCRIP  => "str",
     DRAIN    => "bool",
     ELEC     => "bool",
+    ENH_CONJ => "bool",
+    ENH_HEXES => "bool",
+    ENH_SUMM => "bool",
+    ENH_NECRO => "bool",
+    ENH_TLOC => "bool",
+    ENH_FIRE => "bool",
+    ENH_ICE  => "bool",
+    ENH_AIR  => "bool",
+    ENH_EARTH => "bool",
+    ENH_ALCH => "bool",
     EV       => "num",
     EVIL     => "bool",
     FOG      => "bool",
@@ -536,7 +546,9 @@ my @art_order = (
     "BASE_DELAY", "HP", "CLARITY", "BASE_ACC", "BASE_DAM", "\n",
     "RMSL", "unused", "REGEN", "unused", "NO_UPGRADE", "RCORR", "\n",
     "RMUT", "unused", "CORRODE", "DRAIN", "SLOW", "FRAGILE", "\n",
-    "SH", "HARM", "RAMPAGE", "ARCHMAGI", "\n",
+    "SH", "HARM", "RAMPAGE", "ARCHMAGI", "ENH_CONJ", "ENH_HEXES", "\n",
+    "ENH_SUMM", "ENH_NECRO", "ENH_TLOC", "unused", "ENH_FIRE", "\n",
+    "ENH_ICE", "ENH_AIR", "ENH_EARTH", "ENH_ALCH", "\n",
     "}",
 # end TAG_MAJOR_VERSION
 # start TAG_MAJOR_VERSION == 35
@@ -548,7 +560,9 @@ my @art_order = (
 #     "BASE_DELAY", "HP", "CLARITY", "BASE_ACC", "BASE_DAM", "\n",
 #     "RMSL", "REGEN", "NO_UPGRADE", "RCORR", "\n",
 #     "RMUT", "CORRODE", "DRAIN", "SLOW", "FRAGILE", "\n",
-#     "SH", "HARM", "RAMPAGE", "ARCHMAGI", "\n",
+#     "SH", "HARM", "RAMPAGE", "ARCHMAGI", "ENH_CONJ", "ENH_HEXES", "\n",
+#     "ENH_SUMM", "ENH_NECRO", "ENH_TLOC", "ENH_FIRE", "\n",
+#     "ENH_ICE", "ENH_AIR", "ENH_EARTH", "ENH_ALCH", "\n",
 #     "}",
 # end TAG_MAJOR_VERSION
 
@@ -1093,7 +1107,7 @@ sub read_data
         # Strip comments.
         s/#.*//;
 
-        # Strip trailing whitspace; leading whitespace indicates the
+        # Strip trailing whitespace; leading whitespace indicates the
         # continuation of a string field.
         s/\s*$//;
 

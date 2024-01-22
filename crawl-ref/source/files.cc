@@ -1230,6 +1230,7 @@ static void _grab_followers()
     const bool can_follow = branch_allows_followers(you.where_are_you);
 
     int non_stair_using_allies = 0;
+    int non_stair_using_undead = 0;
     int non_stair_using_summons = 0;
 
     monster* dowan = nullptr;
@@ -1253,6 +1254,8 @@ static void _grab_followers()
             non_stair_using_allies++;
             if (fol->is_summoned() || mons_is_conjured(fol->type))
                 non_stair_using_summons++;
+            if (fol->holiness() & MH_UNDEAD)
+                non_stair_using_undead++;
         }
     }
 
@@ -1287,9 +1290,11 @@ static void _grab_followers()
         }
         else
         {
+            const bool all_dead = non_stair_using_undead == non_stair_using_allies;
             // Permanent undead are left behind but stay.
-            mprf("Your mindless puppet%s behind to rot.",
-                 non_stair_using_allies > 1 ? "s stay" : " stays");
+            mprf("Your mindless puppet%s behind%s.",
+                 non_stair_using_allies > 1 ? "s stay" : " stays",
+                 all_dead ? " to rot" : "");
         }
     }
 
@@ -1325,6 +1330,7 @@ static void _grab_followers()
             end_battlesphere(&mons, false);
         if (mons.type == MONS_SPECTRAL_WEAPON)
             end_spectral_weapon(&mons, false);
+        check_canid_farewell(mons, false);
         mons.flags &= ~MF_TAKING_STAIRS;
     }
 }
@@ -1515,7 +1521,7 @@ static const string VISITED_LEVELS_KEY = "visited_levels";
 // needs to happen.
 // before pregeneration, whether the level had been visited was synonymous with
 // whether it had been visited, but after, we need to track this information
-// more directly. It is also inferrable from turns_on_level, but you can't get
+// more directly. It is also inferable from turns_on_level, but you can't get
 // at that very easily without fully loading the level.
 // no need for a minor version here, though there will be a brief window of
 // offline pregen games that this doesn't handle right -- they will get things
@@ -2004,6 +2010,32 @@ static void _rescue_player_from_wall()
     }
 }
 
+#if TAG_MAJOR_VERSION == 34
+static void _fixup_transmuters()
+{
+    vector<pair<spell_type, talisman_type>> forms = {
+        { SPELL_BEASTLY_APPENDAGE, TALISMAN_BEAST },
+        { SPELL_SPIDER_FORM,       TALISMAN_FLUX },
+        { SPELL_ICE_FORM,          TALISMAN_SERPENT },
+        { SPELL_BLADE_HANDS,       TALISMAN_BLADE },
+        { SPELL_STATUE_FORM,       TALISMAN_STATUE },
+        { SPELL_DRAGON_FORM,       TALISMAN_DRAGON },
+        { SPELL_STORM_FORM,        TALISMAN_STORM },
+        { SPELL_NECROMUTATION,     TALISMAN_DEATH },
+    };
+    for (auto &p : forms) {
+        if (!you.has_spell(p.first))
+            continue;
+        int obj = items(false, OBJ_TALISMANS, p.second, 0);
+        if (obj == NON_ITEM)
+            continue;
+        // Funny but tragic if the player is over red or blue lava.
+        move_item_to_grid(&obj, you.pos(), true);
+        del_spell_from_memory(p.first);
+    }
+}
+#endif
+
 /**
  * Load the current level.
  *
@@ -2069,7 +2101,8 @@ bool load_level(dungeon_feature_type stair_taken, load_mode_type load_mode,
         // games.
         if (old_level.depth != -1)
         {
-            _grab_followers();
+            if (!crawl_state.game_is_descent())
+                _grab_followers();
 
             if (env.level_state & LSTATE_DELETED)
                 delete_level(old_level), dprf("<lightmagenta>Deleting level.</lightmagenta>");
@@ -2163,13 +2196,24 @@ bool load_level(dungeon_feature_type stair_taken, load_mode_type load_mode,
     if (load_mode != LOAD_VISITOR)
         you.set_level_visited(level_id::current());
 
+    const bool descent_downclimb = crawl_state.game_is_descent()
+                                   && feat_stair_direction(stair_taken) == CMD_GO_DOWNSTAIRS
+                                   && !feat_is_descent_exitable(stair_taken);
+    const bool descent_peek = descent_downclimb
+                              && !feat_is_escape_hatch(stair_taken)
+                              && stair_taken != DNGN_TRAP_SHAFT
+                              && old_level.branch == you.where_are_you;
+
     // Markers must be activated early, since they may rely on
     // events issued later, e.g. DET_ENTERING_LEVEL or
     // the DET_TURN_ELAPSED from update_level.
-    if (make_changes || load_mode == LOAD_RESTART_GAME)
+    if (make_changes || (load_mode == LOAD_RESTART_GAME && !descent_peek))
         env.markers.activate_all();
 
-    if (make_changes && env.elapsed_time && !just_created_level)
+    if (load_mode == LOAD_RESTART_GAME && descent_peek)
+        env.markers.clear_need_activate();
+
+    if (make_changes && env.elapsed_time && !just_created_level && !descent_peek)
         update_level(you.elapsed_time - env.elapsed_time);
 
     // Apply all delayed actions, if any. TODO: logic for marshalling this is
@@ -2203,6 +2247,9 @@ bool load_level(dungeon_feature_type stair_taken, load_mode_type load_mode,
     if (just_created_level && make_changes)
         replace_boris();
 
+    if (descent_peek && just_created_level)
+        descent_reveal_stairs();
+
     if (make_changes)
     {
         // Tell stash-tracker and travel that we've changed levels.
@@ -2225,17 +2272,27 @@ bool load_level(dungeon_feature_type stair_taken, load_mode_type load_mode,
     // Things to update for player entering level
     if (load_mode == LOAD_ENTER_LEVEL)
     {
-        // new stairs have less wary monsters, and we don't
-        // want them to attack players quite as soon.
-        // (just_created_level only relevant if we crashed.)
-        you.time_taken *= fast || just_created_level ? 1 : 2;
-
-        you.time_taken = div_rand_round(you.time_taken * 3, 4);
-
-        dprf("arrival time: %d", you.time_taken);
+        if (descent_downclimb)
+        {
+            you.time_taken = 0; // free takebacks
+            if (!descent_peek)
+                descent_crumble_stairs(); // no sense waiting
+        }
+        else
+        {
+            // new stairs have less wary monsters, and we don't
+            // want them to attack players quite as soon.
+            // (just_created_level only relevant if we crashed.)
+            const bool fast_entry = fast || just_created_level;
+            you.time_taken *= fast_entry ? 1 : 2;
+            you.time_taken = div_rand_round(you.time_taken * 3, 4);
+        }
 
         if (just_created_level)
             run_map_epilogues();
+
+        // no cross-level pursuits
+        crawl_state.potential_pursuers.clear();
     }
 
     // Save the created/updated level out to disk:
@@ -2324,7 +2381,9 @@ bool load_level(dungeon_feature_type stair_taken, load_mode_type load_mode,
     if (just_created_level && make_changes)
     {
         you.attribute[ATTR_ABYSS_ENTOURAGE] = 0;
-        gozag_detect_level_gold(true);
+        gozag_count_level_gold();
+        if (branches[you.where_are_you].branch_flags & brflag::fully_map)
+            magic_mapping(GDM, 100, true, false, false, true, false);
     }
 
 
@@ -2373,11 +2432,8 @@ bool load_level(dungeon_feature_type stair_taken, load_mode_type load_mode,
             xom_new_level_noise_or_stealth();
     }
 
-    if (just_created_level && (load_mode == LOAD_ENTER_LEVEL
-                               || load_mode == LOAD_START_GAME))
-    {
+    if (just_created_level && make_changes)
         decr_zot_clock();
-    }
 
     // Initialize halos, etc.
     invalidate_agrid(true);
@@ -2395,6 +2451,9 @@ bool load_level(dungeon_feature_type stair_taken, load_mode_type load_mode,
     if (make_changes && you.position != env.old_player_pos)
        shake_off_monsters(you.as_player());
 
+    if (make_changes)
+        maybe_break_floor_gem();
+
 #if TAG_MAJOR_VERSION == 34
     if (make_changes && you.props.exists("zig-fixup")
         && you.where_are_you == BRANCH_TOMB
@@ -2409,6 +2468,9 @@ bool load_level(dungeon_feature_type stair_taken, load_mode_type load_mode,
         }
         you.props.erase("zig-fixup");
     }
+
+    if (load_mode == LOAD_RESTART_GAME)
+        _fixup_transmuters();
 #endif
 
     return just_created_level;
@@ -3169,7 +3231,7 @@ static bool _restore_game(const string& filename)
 
     if (you.save->has_chunk(CHUNK("kil", "kills")))
     {
-        reader inf(you.save, CHUNK("kil", "kills"),minorVersion);
+        reader inf(you.save, CHUNK("kil", "kills"), minorVersion);
         you.kills.load(inf);
     }
 

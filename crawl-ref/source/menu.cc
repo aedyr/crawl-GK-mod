@@ -497,6 +497,7 @@ void UIMenu::do_layout(int mw, int num_columns, bool just_checking)
     {
         auto& entry = item_info[i];
 
+        // headings occupy the entire row
         column = entry.heading ? 0 : (column+1) % num_columns;
         if (column == 0)
             row++;
@@ -509,7 +510,7 @@ void UIMenu::do_layout(int mw, int num_columns, bool just_checking)
         entry.column = column;
 
         if (entry.heading)
-            column = num_columns-1; // occupy the entire row
+            column = num_columns-1; // headings occupy the entire row, skip the rest
         else
         {
             // TODO(?): tiles will wrap menu entries that don't fit in a single
@@ -587,14 +588,20 @@ void UIMenu::_render()
         {
             formatted_string s = formatted_string::parse_string(
                 me->get_text(), col);
-            // s.chop(m_region.width).display();
-            s.chop(m_nat_column_width).display();
+            // headings always occupy full width
+            if (item_info[i].heading)
+                s.chop(m_region.width).display();
+            else
+                s.chop(m_nat_column_width).display();
         }
         else
         {
             string text = me->get_text();
-            // text = chop_string(text, m_region.width);
-            text = chop_string(text, m_nat_column_width);
+            // headings always occupy full width
+            if (item_info[i].heading)
+                text = chop_string(text, m_region.width);
+            else
+                text = chop_string(text, m_nat_column_width);
             cprintf("%s", text.c_str());
         }
         textbackground(BLACK);
@@ -1971,7 +1978,7 @@ bool Menu::process_key(int keyin)
     }
 
     if (f_keyfilter)
-        keyin = (*f_keyfilter)(keyin);
+        keyin = f_keyfilter(keyin);
     keyin = pre_process(keyin);
 
 #ifdef USE_TILE_WEB
@@ -2150,6 +2157,8 @@ int Menu::get_first_visible(bool skip_init_headers, int col) const
             return i;
         }
     }
+    // returns 0 on empty menu -- callers should guard for this if relevant
+    // (XX -1 might be better? but callers currently assume non-negative...)
     return items.size();
 }
 
@@ -2403,6 +2412,9 @@ bool MonsterMenuEntry::get_tiles(vector<tile_def>& tileset) const
         tileset.emplace_back(TILE_HALO_GD_NEUTRAL);
     else if (m->neutral())
         tileset.emplace_back(TILE_HALO_NEUTRAL);
+    else if (Options.tile_show_threat_levels.find("unusual") != string::npos
+             && m->has_unusual_items())
+        tileset.emplace_back(TILE_THREAT_UNUSUAL);
     else
         switch (m->threat)
         {
@@ -2505,6 +2517,8 @@ bool MonsterMenuEntry::get_tiles(vector<tile_def>& tileset) const
         tileset.emplace_back(TILEI_GOOD_NEUTRAL);
     else if (m->neutral())
         tileset.emplace_back(TILEI_NEUTRAL);
+    else if (m->is(MB_PARALYSED))
+        tileset.emplace_back(TILEI_PARALYSED);
     else if (m->is(MB_FLEEING))
         tileset.emplace_back(TILEI_FLEEING);
     else if (m->is(MB_STABBABLE))
@@ -2577,22 +2591,7 @@ bool PlayerMenuEntry::get_tiles(vector<tile_def>& tileset) const
         p_order[7] = TILEP_PART_LEG;
     }
 
-    // Special case bardings from being cut off.
-    bool is_naga = (equip_doll.parts[TILEP_PART_BASE] == TILEP_BASE_NAGA
-                    || equip_doll.parts[TILEP_PART_BASE] == TILEP_BASE_NAGA + 1);
-    if (equip_doll.parts[TILEP_PART_BOOTS] >= TILEP_BOOTS_NAGA_BARDING
-        && equip_doll.parts[TILEP_PART_BOOTS] <= TILEP_BOOTS_NAGA_BARDING_RED)
-    {
-        flags[TILEP_PART_BOOTS] = is_naga ? TILEP_FLAG_NORMAL : TILEP_FLAG_HIDE;
-    }
-
-    bool is_ptng = (equip_doll.parts[TILEP_PART_BASE] == TILEP_BASE_ARMATAUR
-                    || equip_doll.parts[TILEP_PART_BASE] == TILEP_BASE_ARMATAUR + 1);
-    if (equip_doll.parts[TILEP_PART_BOOTS] >= TILEP_BOOTS_CENTAUR_BARDING
-        && equip_doll.parts[TILEP_PART_BOOTS] <= TILEP_BOOTS_CENTAUR_BARDING_RED)
-    {
-        flags[TILEP_PART_BOOTS] = is_ptng ? TILEP_FLAG_NORMAL : TILEP_FLAG_HIDE;
-    }
+    reveal_bardings(equip_doll.parts, flags);
 
     for (int i = 0; i < TILEP_PART_MAX; ++i)
     {
@@ -2603,14 +2602,7 @@ bool PlayerMenuEntry::get_tiles(vector<tile_def>& tileset) const
 
         ASSERT_RANGE(idx, TILE_MAIN_MAX, TILEP_PLAYER_MAX);
 
-        int ymax = TILE_Y;
-
-        if (flags[p] == TILEP_FLAG_CUT_CENTAUR
-            || flags[p] == TILEP_FLAG_CUT_NAGA)
-        {
-            ymax = 18;
-        }
-
+        const int ymax = flags[p] == TILEP_FLAG_CUT_BOTTOM ? 18 : TILE_Y;
         tileset.emplace_back(idx, ymax);
     }
 
@@ -2688,6 +2680,21 @@ void Menu::select_index(int index, int qty)
     {
         select_item_index(si, qty);
     }
+}
+
+size_t Menu::item_count(bool include_headers) const
+{
+    size_t count = items.size();
+    if (!include_headers)
+    {
+        for (const auto &item : items)
+            if (item->level != MEL_ITEM)
+            {
+                ASSERT(count > 0);
+                count--;
+            }
+    }
+    return count;
 }
 
 int Menu::get_entry_index(const MenuEntry *e) const
@@ -2994,23 +3001,26 @@ bool Menu::snap_in_page(int index)
 
     const int vpy = m_ui.scroller->get_scroll();
 
-    if (y2 >= vpy + vph)
+#ifdef USE_TILE_LOCAL
+    // on local tiles, when scrolling longer menus, the scroller will apply a
+    // shade to the edge of the scroller. Compensate for this for non-end menu
+    // items.
+    const int shade = (index > 0 || index < static_cast<int>(items.size()) - 1)
+        ? UI_SCROLLER_SHADE_SIZE / 2 : 0;
+#else
+    const int shade = 0;
+#endif
+
+    // the = for these is to apply the local tiles shade adjustment if necessary
+    if (y1 <= vpy)
     {
         // scroll up
-        m_ui.scroller->set_scroll(y2 - vph
-#ifdef USE_TILE_LOCAL
-            + UI_SCROLLER_SHADE_SIZE / 2
-#endif
-            );
+        m_ui.scroller->set_scroll(y1 - shade);
     }
-    else if (y1 < vpy)
+    else if (y2 >= vpy + vph)
     {
         // scroll down
-        m_ui.scroller->set_scroll(y1
-#ifdef USE_TILE_LOCAL
-            - UI_SCROLLER_SHADE_SIZE / 2
-#endif
-            );
+        m_ui.scroller->set_scroll(y2 - vph + shade);
     }
     else
         return false; // already in page
@@ -3096,11 +3106,11 @@ bool Menu::page_up()
 bool Menu::line_down()
 {
     // check if we are already at the end.
-    // (why is this necessary?)
-    if (items.size() && in_page(static_cast<int>(items.size()) - 1, true))
+    if (items.empty() || in_page(static_cast<int>(items.size()) - 1, true))
         return false;
 
     int index = get_first_visible();
+
     int first_vis_y;
     m_ui.menu->get_item_region(index, &first_vis_y, nullptr);
 
@@ -3351,26 +3361,7 @@ void Menu::webtiles_update_items(int start, int end) const
     tiles.json_open_array("items");
 
     for (int i = start; i <= end; ++i)
-    {
-        // TODO: why is this different from Menu::webtiles_write_item?
-        tiles.json_open_object();
-        const MenuEntry* me = items[i];
-        tiles.json_write_string("text", me->get_text());
-        int col = item_colour(me);
-        // previous colour field is deleted by client if new one not sent
-        if (col != MENU_ITEM_STOCK_COLOUR)
-            tiles.json_write_int("colour", col);
-        webtiles_write_tiles(*me);
-        if (!me->hotkeys.empty())
-        {
-            tiles.json_open_array("hotkeys");
-            for (int hotkey : me->hotkeys)
-                tiles.json_write_int(hotkey);
-            tiles.json_close_array();
-        }
-
-        tiles.json_close_object();
-    }
+        webtiles_write_item(items[i]);
 
     tiles.json_close_array();
 

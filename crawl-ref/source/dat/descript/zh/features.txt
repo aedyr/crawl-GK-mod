@@ -39,7 +39,7 @@ A white marble altar of Elyvilon
 %%%%
 A blossoming altar of Fedhas
 
-费德哈的祭坛，上面覆盖着生机盎然、色彩艳丽植物。
+费德哈·莽动的祭坛，上面覆盖着生机盎然、色彩艳丽植物。
 %%%%
 An opulent altar of Gozag
 
@@ -96,7 +96,7 @@ A sacrificial altar of Ru
 %%%%
 A shimmering blue altar of Sif Muna
 
-学士之主席夫·穆纳的祭坛，上面布满了错综复杂的图案和久久被遗忘的文字。
+学识之主席夫·穆纳的祭坛，上面布满了错综复杂的图案和久久被遗忘的文字。
 在深蓝色的基座上，盘旋着纯净的魔法凝结的光芒。
 %%%%
 A bloodstained altar of Trog
@@ -166,6 +166,11 @@ A toxic bog
 水性好的可以游过它，并能正常攻击。
 不会游泳的必须缓慢地涉水，在趟过浅水时，有时会在近战中失手；
 但大型生物能够以正常速度移动，以保持平衡，避免摔倒。
+%%%%
+Some mud
+
+一层厚厚的含有沙砾的泥。
+<liquefied>
 %%%%
 The open sea
 
@@ -308,7 +313,7 @@ A gleaming silver wall
 %%%%
 A dry fountain
 
- 一个干涸的喷泉，见证过美好的岁月。
+一个干涸的喷泉，见证过美好的岁月。
 %%%%
 A fountain of clear blue water
 
@@ -821,7 +826,7 @@ The pulsating floor
 # 巫师实验室：宗古多克
 Zonguldrok's gravestone
 
-一个墓碑。上面刻有金色的字样：“宗古多克”。
+宗古多克家的一块墓碑，上面还滴着微咸的灵液。
 %%%%
 A gravestone
 
@@ -962,10 +967,6 @@ A large window
 
 一个嵌在巨大金属管道侧面的窗户，从中可以观察到管内的水流。
 %%%%
-A glass window
-
-一个极为坚硬的玻璃窗，上面有不少弹孔。
-%%%%
 A petrified tree
 
 一棵古树，很久以前就从生物学转入地质学意义。
@@ -1045,7 +1046,7 @@ liquefied
 disjunction haloed
 
 这个区域暴露在移位能量中，
-能量的发出者那里的生物会被闪送，距离施法者越近，机率就越大。
+能量的发出者那里的生物会被闪送，距离施法者越近，几率就越大。
 %%%%
 ########################################################################
 ### 其他效果

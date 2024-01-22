@@ -392,14 +392,14 @@ static void _get_spell_list(vector<spell_type> &spells, int level,
 
 static void _make_book_randart(item_def &book)
 {
-    if (!is_artefact(book))
+    if (is_artefact(book))
+        return;
+
+    book.flags |= ISFLAG_RANDART;
+    if (!book.props.exists(ARTEFACT_APPEAR_KEY))
     {
-        book.flags |= ISFLAG_RANDART;
-        if (!book.props.exists(ARTEFACT_APPEAR_KEY))
-        {
-            book.props[ARTEFACT_APPEAR_KEY].get_string() =
-            make_artefact_name(book, true);
-        }
+        const string name = make_artefact_name(book, true);
+        book.props[ARTEFACT_APPEAR_KEY].get_string() = name;
     }
 }
 
@@ -653,7 +653,7 @@ void init_book_theme_randart(item_def &book, vector<spell_type> spells)
 {
     book.sub_type = BOOK_RANDART_THEME;
     _make_book_randart(book);
-    _set_book_spell_list(book, move(spells));
+    _set_book_spell_list(book, std::move(spells));
 }
 
 /**
@@ -889,18 +889,6 @@ static string _gen_randbook_owner(god_type god, spschool disc1,
     return "";
 }
 
-// Give Roxanne a randart spellbook of the disciplines Transmutations/Earth
-// that includes Statue Form and is named after her.
-void make_book_roxanne_special(item_def *book)
-{
-    spschool disc = random_choose(spschool::transmutation, spschool::earth);
-    vector<spell_type> forced_spell = {SPELL_STATUE_FORM};
-    build_themed_book(*book,
-                      forced_spell_filter(forced_spell,
-                                           capped_spell_filter(19)),
-                      forced_book_theme(disc), 5, "Roxanne");
-}
-
 /// Does the given acq source generate books totally randomly?
 static bool _completely_random_books(int agent)
 {
@@ -909,7 +897,7 @@ static bool _completely_random_books(int agent)
     return agent == GOD_XOM || agent == GOD_NO_GOD;
 }
 
-/// How desireable is the given spell for inclusion in an acquired randbook?
+/// How desirable is the given spell for inclusion in an acquired randbook?
 static int _randbook_spell_weight(spell_type spell, int agent)
 {
     if (_completely_random_books(agent))

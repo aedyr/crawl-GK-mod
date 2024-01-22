@@ -67,6 +67,7 @@
 #include "ouch.h"
 #include "output.h"
 #include "place.h"
+#include "player.h"
 #include "player-equip.h"
 #include "player-stats.h"
 #include "potion.h"
@@ -91,6 +92,7 @@
  #include "rltiles/tiledef-main.h"
 #endif
 #include "timed-effects.h"
+#include "transform.h" // untransform
 #include "traps.h"
 #include "viewchar.h"
 #include "view.h"
@@ -1225,7 +1227,7 @@ static void _zin_saltify(monster* mon)
         // Enemies with more HD leave longer-lasting pillars of salt.
         int time_left = (random2(8) + hd) * BASELINE_DELAY;
         mon_enchant temp_en(ENCH_SLOWLY_DYING, 1, 0, time_left);
-        pillar->update_ench(temp_en);
+        pillar->add_ench(temp_en);
     }
 }
 
@@ -1707,14 +1709,6 @@ void yred_make_bound_soul(monster* mon, bool force_hostile)
     // the proper stats from it.
     define_zombie(mon, mon->type, MONS_BOUND_SOUL);
 
-    // If the original monster has been levelled up, its HD might be different
-    // from its class HD, in which case its HP should be rerolled to match.
-    if (mon->get_experience_level() != orig.get_experience_level())
-    {
-        mon->set_hit_dice(max(orig.get_experience_level(), 1));
-        roll_zombie_hp(mon);
-    }
-
     mon->flags |= MF_NO_REWARD;
 
     // If the original monster type has melee abilities, make sure
@@ -1762,7 +1756,6 @@ bool kiku_gift_capstone_spells()
     vector<spell_type> candidates = { SPELL_HAUNT,
                                       SPELL_BORGNJORS_REVIVIFICATION,
                                       SPELL_INFESTATION,
-                                      SPELL_NECROMUTATION,
                                       SPELL_DEATHS_DOOR };
 
     for (auto spell : candidates)
@@ -1794,7 +1787,7 @@ bool kiku_gift_capstone_spells()
 #endif
     more();
     you.one_time_ability_used.set(you.religion);
-    take_note(Note(NOTE_GOD_GIFT, you.religion));
+    take_note(Note(NOTE_GOD_GIFT, you.religion, 0, "forbidden knowledge"));
     return true;
 }
 
@@ -1864,10 +1857,10 @@ static int _slouch_damage(monster *mon)
                          : mon->type == MONS_JIANGSHI ? 90
                                                       : 1;
 
-    const int player_numer = BASELINE_DELAY * BASELINE_DELAY * BASELINE_DELAY;
+    const int player_number = BASELINE_DELAY * BASELINE_DELAY * BASELINE_DELAY;
     return 4 * (mon->speed * BASELINE_DELAY * jerk_num
                            / mon->action_energy(EUT_MOVE) / jerk_denom
-                - player_numer / player_movement_speed() / player_speed());
+                - player_number / player_movement_speed() / player_speed());
 }
 
 static bool _slouchable(coord_def where)
@@ -2013,7 +2006,6 @@ static map<curse_type, curse_data> _ashenzari_curses =
             SK_POLEARMS, SK_STAVES, SK_UNARMED_COMBAT },
     } },
     { CURSE_RANGED, {
-        // XXX: merge with evocations..?
         "Ranged Combat", "Range",
         { SK_RANGED_WEAPONS, SK_THROWING },
     } },
@@ -2021,9 +2013,9 @@ static map<curse_type, curse_data> _ashenzari_curses =
         "Elements", "Elem",
         { SK_FIRE_MAGIC, SK_ICE_MAGIC, SK_AIR_MAGIC, SK_EARTH_MAGIC },
     } },
-    { CURSE_ALCHEMY, {
-        "Alchemy", "Alch",
-        { SK_POISON_MAGIC, SK_TRANSMUTATIONS },
+    { CURSE_SORCERY, {
+        "Sorcery", "Sorc",
+        { SK_CONJURATIONS, SK_ALCHEMY },
     } },
     { CURSE_COMPANIONS, {
         "Companions", "Comp",
@@ -2031,7 +2023,7 @@ static map<curse_type, curse_data> _ashenzari_curses =
     } },
     { CURSE_BEGUILING, {
         "Beguiling", "Bglg",
-        { SK_CONJURATIONS, SK_HEXES, SK_TRANSLOCATIONS },
+        { SK_HEXES, SK_TRANSLOCATIONS },
     } },
     { CURSE_SELF, {
         "Introspection", "Self",
@@ -2045,9 +2037,9 @@ static map<curse_type, curse_data> _ashenzari_curses =
         "Cunning", "Cun",
         { SK_DODGING, SK_STEALTH },
     } },
-    { CURSE_EVOCATIONS, {
-        "Evocations", "Evo",
-        { SK_EVOCATIONS },
+    { CURSE_DEVICES, {
+        "Devices", "Dev",
+        { SK_EVOCATIONS, SK_SHAPESHIFTING },
     } },
 };
 
@@ -2487,6 +2479,7 @@ static potion_type _gozag_potion_list[][4] =
     { POT_HASTE, POT_HEAL_WOUNDS, NUM_POTIONS, NUM_POTIONS },
     { POT_HASTE, POT_BRILLIANCE, NUM_POTIONS, NUM_POTIONS },
     { POT_HASTE, POT_RESISTANCE, NUM_POTIONS, NUM_POTIONS },
+    { POT_HASTE, POT_ENLIGHTENMENT, NUM_POTIONS, NUM_POTIONS },
     { POT_BRILLIANCE, POT_MAGIC, NUM_POTIONS, NUM_POTIONS },
     { POT_INVISIBILITY, POT_MIGHT, NUM_POTIONS, NUM_POTIONS },
     { POT_HEAL_WOUNDS, POT_CURING, POT_MAGIC, NUM_POTIONS },
@@ -2496,6 +2489,7 @@ static potion_type _gozag_potion_list[][4] =
     { POT_RESISTANCE, POT_MIGHT, NUM_POTIONS, NUM_POTIONS },
     { POT_RESISTANCE, POT_MIGHT, POT_HASTE, NUM_POTIONS },
     { POT_RESISTANCE, POT_INVISIBILITY, NUM_POTIONS, NUM_POTIONS },
+    { POT_RESISTANCE, POT_ENLIGHTENMENT, NUM_POTIONS, NUM_POTIONS },
     { POT_LIGNIFY, POT_MIGHT, POT_RESISTANCE, NUM_POTIONS },
 };
 
@@ -3137,7 +3131,7 @@ bool gozag_bribe_branch()
 
 static int _upheaval_radius(int pow)
 {
-    return pow >= 100 ? 2 : 1;
+    return pow / 100 + 1;
 }
 
 spret qazlal_upheaval(coord_def target, bool quiet, bool fail, dist *player_target)
@@ -3165,7 +3159,7 @@ spret qazlal_upheaval(coord_def target, bool quiet, bool fail, dist *player_targ
         if (!player_target)
             player_target = &target_local;
 
-        targeter_smite tgt(&you, LOS_RADIUS, 0, max_radius);
+        targeter_smite tgt(&you, LOS_RADIUS, max_radius-1, max_radius);
         direction_chooser_args args;
         args.restricts = DIR_TARGET;
         args.mode = TARG_HOSTILE;
@@ -3522,7 +3516,7 @@ static const vector<mutation_type> _major_arcane_sacrifices =
 /// School-disabling mutations that are unfortunate for most characters.
 static const vector<mutation_type> _moderate_arcane_sacrifices =
 {
-    MUT_NO_TRANSMUTATION_MAGIC,
+    MUT_NO_ALCHEMY_MAGIC,
     MUT_NO_HEXES_MAGIC,
 };
 
@@ -3533,7 +3527,6 @@ static const vector<mutation_type> _minor_arcane_sacrifices =
     MUT_NO_FIRE_MAGIC,
     MUT_NO_ICE_MAGIC,
     MUT_NO_EARTH_MAGIC,
-    MUT_NO_POISON_MAGIC,
 };
 
 /// The list of all lists of arcana sacrifice mutations.
@@ -4228,8 +4221,9 @@ static void _ru_kill_skill(skill_type skill)
 
 static void _extra_sacrifice_code(ability_type sac)
 {
-    const sacrifice_def &sac_def = _get_sacrifice_def(sac);
-    if (sac_def.sacrifice == ABIL_RU_SACRIFICE_HAND)
+    switch (_get_sacrifice_def(sac).sacrifice)
+    {
+    case ABIL_RU_SACRIFICE_HAND:
     {
         auto ring_slots = species::ring_slots(you.species, true);
         equipment_type sac_ring_slot = species::sacrificial_arm(you.species);
@@ -4244,7 +4238,7 @@ static void _extra_sacrifice_code(ability_type sac)
         if (shield != nullptr)
         {
             mprf("You can no longer hold %s!",
-                shield->name(DESC_YOUR).c_str());
+                 shield->name(DESC_YOUR).c_str());
             unequip_item(EQ_SHIELD);
         }
 
@@ -4254,7 +4248,7 @@ static void _extra_sacrifice_code(ability_type sac)
             if (you.hands_reqd(*weapon) == HANDS_TWO)
             {
                 mprf("You can no longer hold %s!",
-                    weapon->name(DESC_YOUR).c_str());
+                     weapon->name(DESC_YOUR).c_str());
                 unequip_item(EQ_WEAPON);
             }
         }
@@ -4273,7 +4267,7 @@ static void _extra_sacrifice_code(ability_type sac)
             const bool can_keep = open_ring_slot != EQ_NONE;
 
             mprf("You can no longer wear %s!",
-                ring->name(DESC_YOUR).c_str());
+                 ring->name(DESC_YOUR).c_str());
             unequip_item(sac_ring_slot, true, can_keep);
             if (can_keep)
             {
@@ -4284,10 +4278,12 @@ static void _extra_sacrifice_code(ability_type sac)
                 equip_item(open_ring_slot, ring_inv_slot, false, true);
             }
         }
+        break;
     }
-    else if (sac_def.sacrifice == ABIL_RU_SACRIFICE_EXPERIENCE)
+    case ABIL_RU_SACRIFICE_EXPERIENCE:
         level_change();
-    else if (sac_def.sacrifice == ABIL_RU_SACRIFICE_SKILL)
+        break;
+    case ABIL_RU_SACRIFICE_SKILL:
     {
         uint8_t saved_skills[NUM_SKILLS];
         for (skill_type sk = SK_FIRST_SKILL; sk < NUM_SKILLS; ++sk)
@@ -4307,6 +4303,19 @@ static void _extra_sacrifice_code(ability_type sac)
 
         redraw_screen();
         update_screen();
+        break;
+    }
+    case ABIL_RU_SACRIFICE_FORMS:
+        if (you.form == transformation::none)
+            break;
+
+        unset_default_form();
+        if (!you.transform_uncancellable)
+            untransform(); // XXX: maybe should warn the player pre-sac?
+
+        break;
+    default:
+        break;
     }
 }
 
@@ -4799,12 +4808,12 @@ bool ru_power_leap()
     if (cell_is_solid(beam.target) || monster_at(beam.target))
     {
         // XXX: try to jump somewhere nearby?
-        mpr("Something unexpectedly blocked you, preventing you from leaping!");
+        mpr("Something unexpectedly blocks you, preventing you from leaping!");
         return true;
     }
 
     move_player_to_grid(beam.target, false);
-    apply_barbs_damage();
+    player_did_deliberate_movement();
 
     crawl_state.cancel_cmd_again();
     crawl_state.cancel_cmd_repeat();
@@ -5102,13 +5111,13 @@ bool uskayaw_line_pass()
     }
 
     if (monster_at(beam.target))
-        mpr("Something unexpectedly blocked you, preventing you from passing!");
+        mpr("Something unexpectedly blocks you, preventing you from passing!");
     else
     {
         line_pass.fire();
         you.stop_being_constricted(false);
         move_player_to_grid(beam.target, false);
-        apply_barbs_damage();
+        player_did_deliberate_movement();
     }
 
     crawl_state.cancel_cmd_again();
@@ -5212,7 +5221,8 @@ spret uskayaw_grand_finale(bool fail)
     if (mons->alive())
         monster_die(*mons, KILL_YOU, NON_MONSTER, false);
 
-    if (!mons->alive())
+    // a lost soul may sneak in here
+    if (!mons->alive() && !monster_at(beam.target))
         move_player_to_grid(beam.target, false);
     else
         mpr("You spring back to your original position.");
@@ -5363,7 +5373,7 @@ static void _transfer_drain_nearby(coord_def destination)
     for (adjacent_iterator it(destination); it; ++it)
     {
         monster* mon = monster_at(*it);
-        if (!mon || god_protects(mon))
+        if (!mon || god_protects(mon) || mons_is_firewood(*mon))
             continue;
 
         const int dur = random_range(60, 150);
@@ -5778,7 +5788,7 @@ spret wu_jian_wall_jump_ability()
     crawl_state.cancel_cmd_again();
     crawl_state.cancel_cmd_repeat();
 
-    apply_barbs_damage();
+    player_did_deliberate_movement();
     return spret::success;
 }
 

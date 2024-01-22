@@ -203,7 +203,7 @@ void wizard_heal(bool super_heal)
         // Clear more stuff.
         undrain_hp(9999);
         you.magic_contamination = 0;
-        you.duration[DUR_LIQUID_FLAMES] = 0;
+        you.duration[DUR_STICKY_FLAME] = 0;
         you.clear_beholders();
         you.duration[DUR_PETRIFIED] = 0;
         you.duration[DUR_PETRIFYING] = 0;
@@ -211,7 +211,7 @@ void wizard_heal(bool super_heal)
         you.duration[DUR_DOOM_HOWL] = 0;
         you.duration[DUR_WEAK] = 0;
         you.duration[DUR_NO_HOP] = 0;
-        you.duration[DUR_LOCKED_DOWN] = 0;
+        you.duration[DUR_DIMENSION_ANCHOR] = 0;
         you.duration[DUR_NO_MOMENTUM] = 0;
         you.props[CORROSION_KEY] = 0;
         you.duration[DUR_BARBS] = 0;
@@ -221,6 +221,22 @@ void wizard_heal(bool super_heal)
         you.duration[DUR_EXHAUSTED] = 0;
         you.duration[DUR_BREATH_WEAPON] = 0;
         you.duration[DUR_BLINKBOLT_COOLDOWN] = 0;
+        you.duration[DUR_NO_CAST] = 0;
+        you.duration[DUR_NO_POTIONS] = 0;
+        you.duration[DUR_NO_SCROLLS] = 0;
+        you.duration[DUR_LOWERED_WL] = 0;
+        you.duration[DUR_VERTIGO] = 0;
+        you.duration[DUR_VITRIFIED] = 0;
+        you.duration[DUR_FROZEN] = 0;
+        you.duration[DUR_SAP_MAGIC] = 0;
+        you.duration[DUR_SLOW] = 0;
+        you.duration[DUR_CANINE_FAMILIAR_DEAD] = 0;
+        you.duration[DUR_VORTEX_COOLDOWN] = 0;
+        you.duration[DUR_DRAGON_CALL_COOLDOWN] = 0;
+        you.duration[DUR_DEATHS_DOOR_COOLDOWN] = 0;
+        you.duration[DUR_BERSERK_COOLDOWN] = 0;
+        you.duration[DUR_BLINK_COOLDOWN] = 0;
+        you.duration[DUR_SIPHON_COOLDOWN] = 0;
         delete_all_temp_mutations("Super heal");
         you.stat_loss.init(0);
         you.attribute[ATTR_STAT_LOSS_XP] = 0;
@@ -458,7 +474,7 @@ void wizard_set_all_skills()
 
         // We're not updating skill cost here since XP hasn't changed.
 
-        calc_hp(true, false);
+        calc_hp(true);
         calc_mp();
 
         you.redraw_armour_class = true;
@@ -957,7 +973,12 @@ void wizard_transform()
     }
 
     you.transform_uncancellable = false;
-    if (!transform(200, form) && you.form != form)
+    if (you.default_form == you.form && you.form != transformation::none)
+    {
+        you.default_form = form; // ehhh
+        you.active_talisman.clear();
+    }
+    if (!transform(200, form, true) && you.form != form)
         mpr("Transformation failed.");
 }
 

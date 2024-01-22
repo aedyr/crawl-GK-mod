@@ -39,6 +39,7 @@
 #include "libutil.h"
 #include "macro.h"
 #include "makeitem.h"
+#include "melee-attack.h"
 #include "message.h"
 #include "misc.h"
 #include "mon-behv.h"
@@ -60,7 +61,6 @@
 #include "spl-selfench.h"
 #include "spl-summoning.h"
 #include "spl-transloc.h"
-#include "spl-wpnench.h"
 #include "state.h"
 #include "stringutil.h"
 #include "tag-version.h"
@@ -124,6 +124,8 @@ public:
     vector<const item_def*> item_inv;
     vector<const item_def*> item_floor;
 
+    bool do_easy_floor;
+
     void toggle_display_all();
     void toggle_inv_or_floor();
     void set_hovered(int hovered, bool force=false) override;
@@ -133,11 +135,6 @@ public:
     bool show_unarmed() const
     {
         return oper == OPER_WIELD || oper == OPER_EQUIP;
-    }
-
-    bool show_floor() const
-    {
-        return oper != OPER_EVOKE;
     }
 
     bool allow_full_inv() const
@@ -180,8 +177,6 @@ static string _default_use_title(operation_types oper)
             ? "Put on or remove which piece of jewellery?"
             : "Put on which piece of jewellery?";
     case OPER_QUAFF:
-        if (you.has_mutation(MUT_LONG_TONGUE))
-            return "Slurp which item?";
         return "Drink which item?";
     case OPER_READ:
         return "Read which item?";
@@ -392,8 +387,8 @@ UseItemMenu::UseItemMenu(operation_types _oper, int item_type=OSEL_ANY,
                 | MF_INIT_HOVER | MF_ALLOW_FORMATTING),
         display_all(false), is_inventory(true),
         item_type_filter(item_type), oper(_oper), saved_inv_item(NON_ITEM),
-        saved_hover(-1), last_inv_pos(-1), inv_header(nullptr),
-        floor_header(nullptr)
+        saved_hover(-1), last_inv_pos(-1), do_easy_floor(false),
+        inv_header(nullptr), floor_header(nullptr)
 {
     set_tag("use_item");
     set_flags(get_flags() & ~MF_USE_TWO_COLUMNS);
@@ -419,30 +414,29 @@ bool UseItemMenu::populate_list(bool check_only)
             item_inv.push_back(&item);
         }
     }
-    if (show_floor())
+    // Load floor items...
+    vector<const item_def*> floor = const_item_list_on_square(
+                                            you.visible_igrd(you.pos()));
+
+    for (const auto *it : floor)
     {
-        // Load floor items...
-        vector<const item_def*> floor = const_item_list_on_square(
-                                                you.visible_igrd(you.pos()));
-
-        for (const auto *it : floor)
+        // ...only stuff that can go into your inventory though
+        if (!it->defined() || item_is_stationary(*it) || item_is_spellbook(*it)
+            || item_is_collectible(*it) || it->base_type == OBJ_GOLD)
         {
-            // ...only stuff that can go into your inventory though
-            if (!it->defined() || item_is_stationary(*it) || item_is_orb(*it)
-                || item_is_spellbook(*it) || it->base_type == OBJ_GOLD
-                || it->base_type == OBJ_RUNES)
-            {
-                continue;
-            }
-
-            // even with display_all, only show matching floor items.
-            if (!item_is_selected(*it, item_type_filter))
-                continue;
-
-            if (check_only)
-                return true;
-            item_floor.push_back(it);
+            continue;
         }
+        // No evoking wands, etc from the floor!
+        if (oper == OPER_EVOKE && it->base_type != OBJ_TALISMANS)
+            continue;
+
+        // even with display_all, only show matching floor items.
+        if (!item_is_selected(*it, item_type_filter))
+            continue;
+
+        if (check_only)
+            return true;
+        item_floor.push_back(it);
     }
 
     return !check_only && (item_inv.size() > 0 || item_floor.size() > 0);
@@ -451,14 +445,29 @@ bool UseItemMenu::populate_list(bool check_only)
 bool UseItemMenu::empty_check() const
 {
     // (if choosing weapons, then bare hands are always a possibility)
-    if (!show_unarmed()
-        && !any_items_of_type(item_type_filter, -1, show_floor()))
+    if (show_unarmed())
+        return false;
+    if (any_items_of_type(item_type_filter, -1, oper != OPER_EVOKE))
+        return false;
+    // Only talismans can be evoked from the floor.
+    if (oper == OPER_EVOKE)
     {
-        mprf(MSGCH_PROMPT, "%s",
-            no_selectables_message(item_type_filter).c_str());
-        return true;
+        auto floor_items = item_list_on_square(you.visible_igrd(you.pos()));
+        if (any_of(begin(floor_items), end(floor_items),
+              [=] (const item_def* item) -> bool
+              {
+                  return item->defined()
+                         && item->base_type == OBJ_TALISMANS
+                         && item_is_selected(*item, item_type_filter);
+              }))
+        {
+            return false;
+        }
     }
-    return false;
+
+    mprf(MSGCH_PROMPT, "%s",
+        no_selectables_message(item_type_filter).c_str());
+    return true;
 }
 
 static void _note_tele_cancel(MenuEntry* entry)
@@ -475,6 +484,11 @@ static void _note_tele_cancel(MenuEntry* entry)
 
 void UseItemMenu::populate_menu()
 {
+    const bool use_category_selection = item_type_filter == OSEL_UNIDENT
+                                        || _equip_oper(oper);
+    if (_equip_oper(oper))
+        set_flags(get_flags() | MF_SECONDARY_SCROLL);
+
     if (item_inv.empty())
         is_inventory = false;
     else if (item_floor.empty())
@@ -513,14 +527,10 @@ void UseItemMenu::populate_menu()
         load_items(item_inv,
                     [&](MenuEntry* entry) -> MenuEntry*
                     {
-                        // hacky: remove the class hotkey for cases where it
-                        // is counterintuitive/useless
-                        if (item_type_filter != OSEL_UNIDENT)
-                            entry->hotkeys.pop_back();
                         if (item_type_filter == OBJ_SCROLLS)
                             _note_tele_cancel(entry);
                         return entry;
-                    });
+                    }, 'a', true, use_category_selection);
     }
     last_inv_pos = items.size() - 1;
 
@@ -540,12 +550,10 @@ void UseItemMenu::populate_menu()
         load_items(item_floor,
                     [&](MenuEntry* entry) -> MenuEntry*
                     {
-                        // hacky: remove the class hotkey
-                        entry->hotkeys.pop_back();
                         if (item_type_filter == OBJ_SCROLLS)
                             _note_tele_cancel(entry);
                         return entry;
-                    });
+                    }, 'a', true, false);
     }
     update_sections();
 
@@ -860,8 +868,9 @@ bool UseItemMenu::process_key(int key)
         && Options.easy_floor_use && item_floor.size() == 1
         && (is_inventory || item_inv.empty()))
     {
-        // TODO: should this go with CMD_MENU_CYCLE_HEADERS instead of `,`?
-        lastch = ','; // XX don't use keycode for this
+        // handle easy_floor_use outside of the menu loop
+        lastch = ','; // sanity only
+        do_easy_floor = true;
         return false;
     }
     else if (key == CK_TAB && _equip_oper(oper))
@@ -893,6 +902,7 @@ static operation_types _item_to_oper(item_def *target)
     switch (target->base_type)
     {
     case OBJ_WANDS:
+    case OBJ_TALISMANS:
     case OBJ_MISCELLANY: return OPER_EVOKE;
     case OBJ_POTIONS:    return OPER_QUAFF;
     case OBJ_SCROLLS:    return OPER_READ;
@@ -1032,14 +1042,13 @@ static bool _unequip_item(item_def &i)
 static bool _evoke_item(item_def &i)
 {
     ASSERT(i.defined());
-    // wrapper for compatibility with old api that takes slots
-    if (!in_inventory(i))
+    if (i.base_type != OBJ_TALISMANS && !in_inventory(i))
     {
         mprf(MSGCH_PROMPT, "You aren't carrying that!");
         return false;
     }
 
-    return evoke_item(i.link);
+    return evoke_item(i);
 }
 
 static vector<equipment_type> _current_ring_types();
@@ -1141,7 +1150,7 @@ bool use_an_item(operation_types oper, item_def *target)
  * This function generates a menu containing type_expect items based on the
  * object_class_type to be acted on by another function. First it will list
  * items in inventory, then items on the floor. If the prompt is cancelled,
- * false is returned. If something is successfully choosen, then true is
+ * false is returned. If something is successfully chosen, then true is
  * returned, and at function exit the parameter target points to the object the
  * player chose or to nullptr if the player chose to wield bare hands (this is
  * only possible if oper is OPER_WIELD).
@@ -1178,8 +1187,14 @@ operation_types use_an_item_menu(item_def *&target, operation_types oper, int it
         vector<MenuEntry*> sel = menu.show(true);
         int keyin = menu.getkey();
 
-        // Handle inscribed item keys
-        if (isadigit(keyin))
+        if (menu.do_easy_floor)
+        {
+            // handle an Options.easy_floor_use selection
+            ASSERT(!menu.item_floor.empty());
+            choice_made = true;
+            tmp_tgt = const_cast<item_def*>(menu.item_floor[0]);
+        }
+        else if (isadigit(keyin))
         {
             // select by inscription
             // This allows you to select stuff by inscription that is not on the
@@ -1189,13 +1204,6 @@ operation_types use_an_item_menu(item_def *&target, operation_types oper, int it
             tmp_tgt = digit_inscription_to_item(keyin, oper);
             if (tmp_tgt)
                 choice_made = true;
-        }
-        else if (keyin == ',')
-        {
-            // first floor item
-            ASSERT(!menu.item_floor.empty());
-            choice_made = true;
-            tmp_tgt = const_cast<item_def*>(menu.item_floor[0]);
         }
         else if (keyin == '-' && menu.show_unarmed())
         {
@@ -1537,13 +1545,10 @@ static bool _do_wield_weapon(item_def *to_wield, bool adjust_time_taken)
 #endif
             canned_msg(MSG_EMPTY_HANDED_NOW);
 
-            // Switching to bare hands is extra fast.
+            // Switching to bare hands is the same speed as other weapon swaps.
             you.turn_is_over = true;
             if (adjust_time_taken)
-            {
-                you.time_taken *= 3;
-                you.time_taken /= 10;
-            }
+                you.time_taken /= 2;
         }
         else
             canned_msg(MSG_EMPTY_HANDED_ALREADY);
@@ -1677,7 +1682,7 @@ static string _cant_wear_barding_reason(bool ignore_temporary)
     if (!you.wear_barding())
         return "You can't wear that!";
 
-    if (!ignore_temporary && player_is_shapechanged())
+    if (!ignore_temporary && !get_form()->slot_available(EQ_BOOTS))
         return "You can wear that only in your normal form.";
 
     return "";
@@ -1694,9 +1699,7 @@ static string _cant_wear_barding_reason(bool ignore_temporary)
  * @param verbose Whether to print a message about your inability to wear item.
  * @param ignore_temporary Whether to take into account forms/fishtail/2handers.
  *                         Note that no matter what this is set to, all
- *                         mutations will be taken into account, except for
- *                         ones from Beastly Appendage, which are only checked
- *                         if this is false.
+ *                         mutations will be taken into account.
  */
 bool can_wear_armour(const item_def &item, bool verbose, bool ignore_temporary)
 {
@@ -2074,7 +2077,7 @@ static bool _can_takeoff_armour(int item)
 bool takeoff_armour(int item, bool noask)
 {
     ASSERT_RANGE(item, 0, ENDOFPACK);
-    // We want to check non-item depedent stuff before prompting for the actual item
+    // We want to check non-item dependent stuff before prompting for the actual item
     if (!_can_generically_use_armour(false))
         return false;
 
@@ -2947,6 +2950,58 @@ void prompt_inscribe_item()
     inscribe_item(you.inv[item_slot]);
 }
 
+bool has_drunken_brawl_targets()
+{
+    list<actor*> targets;
+    get_cleave_targets(you, coord_def(), targets, -1, true);
+    return !targets.empty();
+}
+
+// Perform a melee attack against every adjacent hostile target, and print a
+// special message if there are any.
+static bool _oni_drunken_swing()
+{
+    // Use the same logic for target-picking that cleaving does
+    list<actor*> targets;
+    get_cleave_targets(you, coord_def(), targets, -1, true);
+
+    // Test that we have at least one valid non-prompting attack
+    bool valid_swing = false;
+    for (actor* victim : targets)
+    {
+        melee_attack attk(&you, victim);
+        if (!attk.would_prompt_player())
+            valid_swing = true;
+    }
+
+    if (!valid_swing)
+        return false;
+
+    if (!targets.empty())
+    {
+        if (you.weapon())
+        {
+            mprf("You take a swig of the potion and twirl %s.",
+                 you.weapon()->name(DESC_YOUR).c_str());
+        }
+        else
+            mpr("You take a swig of the potion and flex your muscles.");
+
+        for (actor* victim : targets)
+        {
+            melee_attack attk(&you, victim);
+            attk.never_cleave = true;
+
+            if (!attk.would_prompt_player())
+                attk.attack();
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
 bool drink(item_def* potion)
 {
     string r = cannot_drink_item_reason(potion, true, true);
@@ -2978,6 +3033,7 @@ bool drink(item_def* potion)
         return false;
     }
 
+    const bool nearby_mons = there_are_monsters_nearby(true, true, false);
     if (player_equip_unrand(UNRAND_VICTORY, true)
         && !you.props.exists(VICTORY_CONDUCT_KEY))
     {
@@ -2988,7 +3044,7 @@ bool drink(item_def* potion)
                                                        false).c_str());
 
         if (item->props[VICTORY_STAT_KEY].get_int() > 0
-            && there_are_monsters_nearby(true, true, false)
+            && nearby_mons
             && !yesno(unrand_prompt.c_str(), false, 'n'))
         {
             canned_msg(MSG_OK);
@@ -3009,17 +3065,19 @@ bool drink(item_def* potion)
         return false;
     }
 
+    // Drunken master, swing!
+    // We do this *before* actually drinking the potion for nicer messaging.
+    if (you.has_mutation(MUT_DRUNKEN_BRAWLING)
+        && oni_likes_potion(static_cast<potion_type>(potion->sub_type)))
+    {
+        _oni_drunken_swing();
+    }
+
     // Check for Delatra's gloves before potentially melding them.
     bool heal_on_id = player_equip_unrand(UNRAND_DELATRAS_GLOVES);
 
     if (!quaff_potion(*potion))
         return false;
-
-    if (you.has_mutation(MUT_LONG_TONGUE))
-    {
-        mprf("You slurp down every last drop of the %s!",
-             potion->name(DESC_QUALNAME).c_str());
-    }
 
     if (!alreadyknown)
     {
@@ -3038,11 +3096,8 @@ bool drink(item_def* potion)
     }
 
     // Drinking with hostile visible mons nearby resets unrand "Victory" stats.
-    if (player_equip_unrand(UNRAND_VICTORY, true)
-        && there_are_monsters_nearby(true, true, false))
-    {
+    if (player_equip_unrand(UNRAND_VICTORY, true) && nearby_mons)
         you.props[VICTORY_CONDUCT_KEY] = true;
-    }
 
     // We'll need this later, after destroying the item.
     const bool was_exp = potion->sub_type == POT_EXPERIENCE;
@@ -3063,22 +3118,17 @@ bool drink(item_def* potion)
 }
 
 // XXX: there's probably a nicer way of doing this.
+// Conducts, maybe?
 bool god_hates_brand(const int brand)
 {
-    if (is_good_god(you.religion)
-        && (brand == SPWPN_DRAINING
-            || brand == SPWPN_VAMPIRISM
-            || brand == SPWPN_CHAOS
-            || brand == SPWPN_PAIN))
-    {
+    if (is_good_god(you.religion) && is_evil_brand(brand))
         return true;
-    }
 
-    if (you_worship(GOD_CHEIBRIADOS) && (brand == SPWPN_CHAOS
-                                         || brand == SPWPN_SPEED))
-    {
+    if (you_worship(GOD_ZIN) && is_chaotic_brand(brand))
         return true;
-    }
+
+    if (you_worship(GOD_CHEIBRIADOS) && is_hasty_brand(brand))
+        return true;
 
     if (you_worship(GOD_YREDELEMNUL) && brand == SPWPN_HOLY_WRATH)
         return true;
@@ -3268,8 +3318,23 @@ static item_def* _scroll_choose_weapon(bool alreadyknown, const string &pre_msg,
 // Returns true if the scroll is used up.
 static bool _handle_brand_weapon(bool alreadyknown, const string &pre_msg)
 {
-    item_def* weapon = _scroll_choose_weapon(alreadyknown, pre_msg,
-                                             SCR_BRAND_WEAPON);
+    item_def* weapon = nullptr;
+    string letter = "";
+    if (!clua.callfn("c_choose_brand_weapon", ">s", &letter))
+    {
+        if (!clua.error.empty())
+            mprf(MSGCH_ERROR, "Lua error: %s", clua.error.c_str());
+    }
+    else if (isalpha(letter.c_str()[0]))
+    {
+        item_def &item = you.inv[letter_to_index(letter.c_str()[0])];
+        if (item.defined() && is_brandable_weapon(item, true))
+            weapon = &item;
+    }
+
+    if (!weapon)
+        weapon = _scroll_choose_weapon(alreadyknown, pre_msg, SCR_BRAND_WEAPON);
+
     if (!weapon)
         return !alreadyknown;
 
@@ -3292,7 +3357,10 @@ bool enchant_weapon(item_def &wpn, bool quiet)
         wpn.plus++;
         success = true;
         if (!quiet)
-            mprf("%s glows red for a moment.", iname.c_str());
+        {
+            const char* dur = wpn.plus < MAX_WPN_ENCHANT ? "moment" : "while";
+            mprf("%s glows red for a %s.", iname.c_str(), dur);
+        }
     }
 
     if (!success && !quiet)
@@ -3319,8 +3387,25 @@ bool enchant_weapon(item_def &wpn, bool quiet)
  */
 static bool _identify(bool alreadyknown, const string &pre_msg, int &link)
 {
-    item_def* itemp = _choose_target_item_for_scroll(alreadyknown, OSEL_UNIDENT,
-                       "Identify which item? (\\ to view known items)");
+    item_def* itemp = nullptr;
+    string letter = "";
+    if (!clua.callfn("c_choose_identify", ">s", &letter))
+    {
+        if (!clua.error.empty())
+            mprf(MSGCH_ERROR, "Lua error: %s", clua.error.c_str());
+    }
+    else if (isalpha(letter.c_str()[0]))
+    {
+        item_def &item = you.inv[letter_to_index(letter.c_str()[0])];
+        if (item.defined() && !fully_identified(item))
+            itemp = &item;
+    }
+
+    if (!itemp)
+    {
+        itemp = _choose_target_item_for_scroll(alreadyknown, OSEL_UNIDENT,
+            "Identify which item? (\\ to view known items)");
+    }
 
     if (!itemp)
         return !alreadyknown;
@@ -3356,21 +3441,42 @@ static bool _identify(bool alreadyknown, const string &pre_msg, int &link)
 
 static bool _handle_enchant_weapon(bool alreadyknown, const string &pre_msg)
 {
-    item_def* weapon = _scroll_choose_weapon(alreadyknown, pre_msg,
-                                             SCR_ENCHANT_WEAPON);
+    item_def* weapon = nullptr;
+    string letter = "";
+    if (!clua.callfn("c_choose_enchant_weapon", ">s", &letter))
+    {
+        if (!clua.error.empty())
+            mprf(MSGCH_ERROR, "Lua error: %s", clua.error.c_str());
+    }
+    else if (isalpha(letter.c_str()[0]))
+    {
+        item_def &item = you.inv[letter_to_index(letter.c_str()[0])];
+        if (item.defined() && is_enchantable_weapon(item, true))
+            weapon = &item;
+    }
+
+    if (!weapon)
+    {
+        weapon = _scroll_choose_weapon(alreadyknown, pre_msg,
+                                       SCR_ENCHANT_WEAPON);
+    }
+
     if (!weapon)
         return !alreadyknown;
 
-    enchant_weapon(*weapon, false);
+    const bool success = enchant_weapon(*weapon, false);
+    if (success && weapon->plus == MAX_WPN_ENCHANT)
+    {
+        crawl_state.cancel_cmd_again();
+        crawl_state.cancel_cmd_repeat();
+    }
     return true;
 }
 
-bool enchant_armour(int &ac_change, bool quiet, item_def &arm)
+bool enchant_armour(item_def &arm, bool quiet)
 {
     ASSERT(arm.defined());
     ASSERT(arm.base_type == OBJ_ARMOUR);
-
-    ac_change = 0;
 
     // Cannot be enchanted.
     if (!is_enchantable_armour(arm))
@@ -3380,56 +3486,76 @@ bool enchant_armour(int &ac_change, bool quiet, item_def &arm)
         return false;
     }
 
-    // Output message before changing enchantment and curse status.
+    string name = _item_name(arm);
+
+    ++arm.plus;
+
     if (!quiet)
     {
         const bool plural = armour_is_hide(arm)
                             && arm.sub_type != ARM_TROLL_LEATHER_ARMOUR;
-        mprf("%s %s green for a moment.",
-             _item_name(arm).c_str(),
-             conjugate_verb("glow", plural).c_str());
+        string glow = conjugate_verb("glow", plural);
+        const char* dur = is_enchantable_armour(arm) ? "moment" : "while";
+        mprf("%s %s green for a %s.", name.c_str(), glow.c_str(), dur);
     }
-
-    arm.plus++;
-    ac_change++;
 
     return true;
 }
 
-static int _handle_enchant_armour(bool alreadyknown, const string &pre_msg)
+/// Returns whether the scroll is used up.
+static bool _handle_enchant_armour(bool alreadyknown, const string &pre_msg)
 {
-    item_def* target = _choose_target_item_for_scroll(alreadyknown, OSEL_ENCHANTABLE_ARMOUR,
-                                                      "Enchant which item?");
+    item_def* target= nullptr;
+    string letter = "";
+    if (!clua.callfn("c_choose_enchant_armour", ">s", &letter))
+    {
+        if (!clua.error.empty())
+            mprf(MSGCH_ERROR, "Lua error: %s", clua.error.c_str());
+    }
+    else if (isalpha(letter.c_str()[0]))
+    {
+        item_def &item = you.inv[letter_to_index(letter.c_str()[0])];
+        if (item.defined() && is_enchantable_armour(item, true))
+            target = &item;
+    }
 
     if (!target)
-        return alreadyknown ? -1 : 0;
+    {
+        target = _choose_target_item_for_scroll(alreadyknown,
+            OSEL_ENCHANTABLE_ARMOUR, "Enchant which item?");
+    }
+
+    if (!target)
+        return !alreadyknown;
 
     // Okay, we may actually (attempt to) enchant something.
     if (alreadyknown)
         mpr(pre_msg);
 
-    int ac_change;
-    bool result = enchant_armour(ac_change, false, *target);
+    const bool success = enchant_armour(*target, false);
+    if (!success)
+        return true;
 
-    if (ac_change)
-        you.redraw_armour_class = true;
+    you.redraw_armour_class = true;
+    if (!is_enchantable_armour(*target))
+    {
+        crawl_state.cancel_cmd_again();
+        crawl_state.cancel_cmd_repeat();
+    }
 
-    return result ? 1 : 0;
+    return true;
 }
 
 static void _vulnerability_scroll()
 {
     const int dur = 30 + random2(20);
-    mon_enchant lowered_wl(ENCH_LOWERED_WL, 1, &you, dur * BASELINE_DELAY);
 
     // Go over all creatures in LOS.
     for (radius_iterator ri(you.pos(), LOS_NO_TRANS); ri; ++ri)
     {
         if (monster* mon = monster_at(*ri))
         {
-            // If relevant, monsters have their WL halved.
-            if (!mons_invuln_will(*mon))
-                mon->add_ench(lowered_wl);
+            mon->strip_willpower(&you, dur, true);
 
             // Annoying but not enough to turn friendlies against you.
             if (!mon->wont_attack())
@@ -3437,8 +3563,8 @@ static void _vulnerability_scroll()
         }
     }
 
-    you.set_duration(DUR_LOWERED_WL, dur, 0,
-                     "Magic quickly surges around you.");
+    you.strip_willpower(&you, dur, true);
+    mpr("A wave of despondency washes over your surroundings.");
 }
 
 static bool _is_cancellable_scroll(scroll_type scroll)
@@ -3449,7 +3575,6 @@ static bool _is_cancellable_scroll(scroll_type scroll)
            || scroll == SCR_AMNESIA
            || scroll == SCR_BRAND_WEAPON
            || scroll == SCR_ENCHANT_WEAPON
-           || scroll == SCR_MAGIC_MAPPING
            || scroll == SCR_ACQUIREMENT
            || scroll == SCR_POISON;
 }
@@ -3772,6 +3897,7 @@ bool read(item_def* scroll, dist *target)
         }
     }
 
+    const bool nearby_mons = there_are_monsters_nearby(true, true, false);
     if (player_equip_unrand(UNRAND_VICTORY, true)
         && !you.props.exists(VICTORY_CONDUCT_KEY))
     {
@@ -3782,7 +3908,7 @@ bool read(item_def* scroll, dist *target)
                                                        false).c_str());
 
         if (item->props[VICTORY_STAT_KEY].get_int() > 0
-            && there_are_monsters_nearby(true, true, false)
+            && nearby_mons
             && !yesno(unrand_prompt.c_str(), false, 'n'))
         {
             canned_msg(MSG_OK);
@@ -3811,9 +3937,9 @@ bool read(item_def* scroll, dist *target)
     // For cancellable scrolls leave printing this message to their
     // respective functions.
     const string pre_succ_msg =
-            make_stringf("As you%s read the %s, it crumbles to dust.",
-                         you.has_mutation(MUT_AWKWARD_TONGUE) ? " slowly" : "",
-                          scroll->name(DESC_QUALNAME).c_str());
+            make_stringf("As you read the %s, it %s.",
+                          scroll->name(DESC_QUALNAME).c_str(),
+                         which_scroll == SCR_FOG ? "dissolves into smoke" : "crumbles to dust");
     if (!_is_cancellable_scroll(which_scroll))
     {
         mpr(pre_succ_msg);
@@ -3888,15 +4014,14 @@ bool read(item_def* scroll, dist *target)
 
     case SCR_FOG:
     {
-        mpr("The scroll dissolves into smoke.");
         auto smoke = random_smoke_type();
         big_cloud(smoke, &you, you.pos(), 50, 8 + random2(8));
         break;
     }
 
-    case SCR_MAGIC_MAPPING:
-        mpr(pre_succ_msg);
-        magic_mapping(500, 100, false);
+    case SCR_REVELATION:
+        magic_mapping(GDM, 100, false, false, false, false, false);
+        you.duration[DUR_REVELATION] = you.time_taken + 1;
         break;
 
     case SCR_TORMENT:
@@ -3987,8 +4112,7 @@ bool read(item_def* scroll, dist *target)
             mpr("It is a scroll of enchant armour.");
             // included in default force_more_message (to show it before menu)
         }
-        cancel_scroll =
-            (_handle_enchant_armour(alreadyknown, pre_succ_msg) == -1);
+        cancel_scroll = !_handle_enchant_armour(alreadyknown, pre_succ_msg);
         break;
 #if TAG_MAJOR_VERSION == 34
     case SCR_CURSE_WEAPON:
@@ -4059,9 +4183,8 @@ bool read(item_def* scroll, dist *target)
             dec_inv_item_quantity(link, 1);
         else
             dec_mitm_item_quantity(scroll->index(), 1);
+
         count_action(CACT_USE, OBJ_SCROLLS);
-        if (you.has_mutation(MUT_AWKWARD_TONGUE))
-            you.time_taken = div_rand_round(you.time_taken * 3, 2);
     }
 
     if (!alreadyknown
@@ -4096,7 +4219,7 @@ bool read(item_def* scroll, dist *target)
 
     // Reading with hostile visible mons nearby resets unrand "Victory" stats.
     if (player_equip_unrand(UNRAND_VICTORY, true)
-        && there_are_monsters_nearby(true, true, false)
+        && nearby_mons
         && !cancel_scroll)
     {
         you.props[VICTORY_CONDUCT_KEY] = true;
@@ -4164,7 +4287,7 @@ void tile_item_use_secondary(int idx)
 
 void tile_item_use(int idx)
 {
-    const item_def item = you.inv[idx];
+    item_def &item = you.inv[idx];
 
     // Equipped?
     bool equipped = false;
@@ -4200,6 +4323,7 @@ void tile_item_use(int idx)
     case OBJ_WEAPONS:
     case OBJ_STAVES:
     case OBJ_MISCELLANY:
+    case OBJ_TALISMANS:
     case OBJ_WANDS:
         // Wield any unwielded item of these types.
         // XX this case looks pretty outdated
@@ -4209,9 +4333,10 @@ void tile_item_use(int idx)
             return;
         }
         // Evoke misc. items or wands.
-        if (item_is_evokable(item, false))
+        if (item_ever_evokable(item))
         {
-            evoke_item(idx);
+            if (check_warning_inscriptions(item, OPER_EVOKE))
+                evoke_item(item);
             return;
         }
         // Unwield wielded items.

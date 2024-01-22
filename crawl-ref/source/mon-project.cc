@@ -268,12 +268,12 @@ static void _fuzz_direction(const actor *caster, monster& mon, int pow)
 // Alas, too much differs to reuse beam shield blocks :(
 static bool _iood_shielded(monster& mon, actor &victim)
 {
-    if (!victim.shielded() || victim.incapacitated())
+    if (!victim.shielded() || victim.incapacitated() || victim.shield_exhausted())
         return false;
 
     const int to_hit = 15 + (mons_is_projectile(mon.type) ?
         mon.props[IOOD_POW].get_short()/12 : mon.get_hit_dice()/2);
-    const int con_block = random2(to_hit + victim.shield_block_penalty());
+    const int con_block = random2(to_hit);
     const int pro_block = victim.shield_bonus();
     dprf("iood shield: pro %d, con %d", pro_block, con_block);
     return pro_block >= con_block;
@@ -297,7 +297,7 @@ static bool _iood_hit(monster& mon, const coord_def &pos, bool big_boom = false)
 {
     bolt beam;
     beam.name = "orb of destruction";
-    beam.flavour = BEAM_DEVASTATION;
+    beam.flavour = BEAM_DESTRUCTION;
     beam.attitude = mon.attitude;
 
     actor *caster = actor_by_mid(mon.summoner);

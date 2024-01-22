@@ -1090,7 +1090,7 @@ void map_lines::extend(int min_width, int min_height, char fill)
             for (int x = 0; x < old_width; ++x)
                 (*new_overlay)(x, y) = (*overlay)(x, y);
 
-        overlay = move(new_overlay);
+        overlay = std::move(new_overlay);
     }
 }
 
@@ -1601,7 +1601,7 @@ void map_lines::rotate(bool clockwise)
         for (int i = xs, y = 0; i != xe; i += xi, ++y)
             for (int j = ys, x = 0; j != ye; j += yi, ++x)
                 (*new_overlay)(x, y) = (*overlay)(i, j);
-        overlay = move(new_overlay);
+        overlay = std::move(new_overlay);
     }
 
     map_width = lines.size();
@@ -3903,8 +3903,10 @@ mons_list::mons_spec_slot mons_list::parse_mons_spec(string spec)
         }
 
         mspec.genweight = find_weight(mon_str);
-        if (mspec.genweight == TAG_UNFOUND || mspec.genweight <= 0)
+        if (mspec.genweight == TAG_UNFOUND)
             mspec.genweight = 10;
+        else if (mspec.genweight <= 0)
+            mspec.genweight = 0;
 
         mspec.generate_awake = strip_tag(mon_str, "generate_awake");
         mspec.patrolling     = strip_tag(mon_str, "patrolling");
@@ -4066,7 +4068,7 @@ mons_list::mons_spec_slot mons_list::parse_mons_spec(string spec)
             }
             // Store name along with the tile.
             mspec.props[MONSTER_TILE_NAME_KEY].get_string() = tile;
-            mspec.props[MONSTER_TILE_KEY] = short(index);
+            mspec.props[MONSTER_TILE_KEY] = int(index);
         }
 
         string dbname = strip_tag_prefix(mon_str, "dbname:");
@@ -4208,7 +4210,6 @@ mons_list::mons_spec_slot mons_list::parse_mons_spec(string spec)
             MAYBE_COPY(MUTANT_BEAST_FACETS);
             MAYBE_COPY(MGEN_BLOB_SIZE);
             MAYBE_COPY(MGEN_NUM_HEADS);
-            MAYBE_COPY(MGEN_NO_AUTO_CRUMBLE);
 #undef MAYBE_COPY
         }
 
@@ -4453,7 +4454,7 @@ mons_spec mons_list::get_slime_spec(const string &name) const
 
 /**
  * Build a monster specification for a specified pillar of salt. The pillar of
- * salt won't crumble over time, since that seems unuseful for any version of
+ * salt won't crumble over time, since that seems useful for any version of
  * this function.
  *
  * @param name      The description of the pillar of salt; e.g.
@@ -4472,7 +4473,6 @@ mons_spec mons_list::get_salt_spec(const string &name) const
 
     mons_spec spec(MONS_PILLAR_OF_SALT);
     spec.monbase = _fixup_mon_type(base_mon.type);
-    spec.props[MGEN_NO_AUTO_CRUMBLE] = true;
     return spec;
 }
 
@@ -4486,7 +4486,7 @@ mons_spec mons_list::get_salt_spec(const string &name) const
 //    yellow draconian or draconian knight - the monster specified.
 //
 // Others:
-//    any draconian => any random draconain
+//    any draconian => any random draconian
 //    any base draconian => any unspecialised coloured draconian.
 //    any nonbase draconian => any specialised coloured draconian.
 //    any <colour> draconian => any draconian of the colour.
@@ -5282,8 +5282,18 @@ bool item_list::parse_single_spec(item_spec& result, string s)
     if (!custom_name.empty())
         result.props[ITEM_NAME_KEY] = custom_name;
 
+    string original = s;
     const int plus = strip_number_tag(s, "plus:");
-    if (plus != TAG_UNFOUND)
+    if (plus == TAG_UNFOUND)
+    {
+        const string num = strip_tag_prefix(original, "plus:");
+        if (!num.empty())
+        {
+            error = make_stringf("Bad item plus: %s", num.c_str());
+            return false;
+        }
+    }
+    else
         result.props[PLUS_KEY].get_int() = plus;
 
     if (strip_tag(s, "no_uniq"))
@@ -5495,6 +5505,16 @@ bool item_list::parse_single_spec(item_spec& result, string s)
     else
         parse_raw_name(s, result);
 
+    // XXX: Ideally we'd have a common function to check validate plus values
+    // by item type and subtype.
+    if ((result.base_type == OBJ_ARMOUR || result.base_type == OBJ_WEAPONS)
+        && plus != TAG_UNFOUND
+        && abs(plus) > 30)
+    {
+        error = make_stringf("Item plus too high: %d", plus);
+        return false;
+    }
+
     if (!error.empty())
         return false;
 
@@ -5623,6 +5643,13 @@ void item_list::parse_random_by_class(string c, item_spec &spec)
     {
         spec.base_type = OBJ_MISCELLANY;
         spec.sub_type = item_for_set(ITEM_SET_AREA_MISCELLANY);
+        return;
+    }
+
+    if (c == "ally misc")
+    {
+        spec.base_type = OBJ_MISCELLANY;
+        spec.sub_type = item_for_set(ITEM_SET_ALLY_MISCELLANY);
         return;
     }
 

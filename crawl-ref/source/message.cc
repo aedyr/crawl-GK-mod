@@ -797,7 +797,7 @@ public:
             //
             // However, it should only print one message at a time when it really
             // needs to, i.e. an sound that interrupts the game. Otherwise it is
-            // more efficent to print text together.
+            // more efficient to print text together.
 #ifdef USE_SOUND
             play_sound(check_sound_patterns(orig_full_text));
 #endif
@@ -1696,7 +1696,7 @@ int msgwin_get_line(string prompt, char *buf, int len,
         tiles.push_ui_layout("msgwin-get-line", 0);
         popup->on_layout_pop([](){ tiles.pop_ui_layout(); });
 #endif
-        ui::run_layout(move(popup), done, input);
+        ui::run_layout(std::move(popup), done, input);
 
         strncpy(buf, input->get_text().c_str(), len - 1);
         buf[len - 1] = '\0';

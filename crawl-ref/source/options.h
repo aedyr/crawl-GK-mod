@@ -52,6 +52,7 @@ enum monster_list_colour_type
     MLC_EASY,
     MLC_TOUGH,
     MLC_NASTY,
+    MLC_UNUSUAL,
     NUM_MLC
 };
 
@@ -197,7 +198,7 @@ enum use_animation_type
     UA_HP               = (1 << 2),
     // flashes the screen on attempt to travel or rest with a monster in view
     UA_MONSTER_IN_SIGHT = (1 << 3),
-    // various animations for picking up runes and the orb
+    // various animations for picking up runes, gems, and the orb
     UA_PICKUP           = (1 << 4),
     // various monster spell/ability effects (slime creature merging, etc)
     UA_MONSTER          = (1 << 5),
@@ -503,12 +504,16 @@ public:
     int         colour[16];      // macro fg colours to other colours
     unsigned    background_colour; // select default background colour
     unsigned    foreground_colour; // select default foreground colour
+    bool        use_terminal_default_colours; // inherit default colors from terminal
     msg_colour_type channels[NUM_MESSAGE_CHANNELS];  // msg channel colouring
     vector<string> use_animations_option;
     use_animations_type use_animations; // which animations to show
     bool        darken_beyond_range; // whether to darken squares out of range
     bool        show_blood; // whether to show blood or not
     bool        reduce_animations;   // if true, don't show interim steps for animations
+
+    vector<text_pattern> unusual_monster_items; // which monster items to
+                                                // highlight as unusual
 
     int         hp_warning;      // percentage hp for danger warning
     int         magic_point_warning;    // percentage mp for danger warning
@@ -517,6 +522,8 @@ public:
     bool        small_more;       // Show one-char more prompts.
     unsigned    friend_highlight;     // Attribute for highlighting friendly monsters
     unsigned    neutral_highlight;    // Attribute for highlighting neutral monsters
+    unsigned    unusual_highlight;    // Attribute for highlighting hostile
+                                      // monsters with unusual items
     bool        blink_brightens_background; // Assume blink will brighten bg.
     maybe_bool  bold_brightens_foreground; // Assume bold will brighten fg.
     bool        best_effort_brighten_background; // Allow bg brighten attempts.
@@ -528,6 +535,8 @@ public:
                                         // two autofight commands
     bool        cloud_status;     // Whether to show a cloud status light
     bool        always_show_zot;  // Whether to always show the Zot timer
+    bool        always_show_gems; // Whether to always show gem timers
+    bool        more_gem_info;    // Whether to show gems breaking
 
 #ifdef USE_TILE_WEB
     vector<object_class_type> action_panel;   // types of items to show on the panel
@@ -694,6 +703,7 @@ public:
 
     int         pickup_menu_limit;  // Over this number of items, menu for
                                     // pickup
+    bool        prompt_menu;        // yesno prompt uses a menu popup
     bool        ability_menu;       // 'a'bility starts with a full-screen menu
     bool        spell_menu;         // 'z' starts with a full-screen menu
     bool        easy_floor_use;     // , selects the floor item if there's 1

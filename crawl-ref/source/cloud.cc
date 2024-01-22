@@ -33,6 +33,7 @@
 #include "player-stats.h"
 #include "religion.h"
 #include "shout.h"
+#include "spl-clouds.h" // explode_blastmotes_at
 #include "spl-util.h"
 #include "state.h"
 #include "stringutil.h"
@@ -256,12 +257,10 @@ static const cloud_data clouds[] = {
       BEAM_ELECTRICITY,                         // beam_effect
       { 23, 27 },
     },
-    // CLOUD_NEGATIVE_ENERGY,
-    { "negative energy", nullptr,               // terse, verbose name
+    // CLOUD_MISERY,
+    { "excruciating misery", nullptr,           // terse, verbose name
       ETC_INCARNADINE,                          // colour
-      { TILE_CLOUD_NEG, CTVARY_DUR },           // tile
-      BEAM_NEG,                                 // beam_effect
-      NORMAL_CLOUD_DAM,                         // base, random damage
+      { TILE_CLOUD_MISERY, CTVARY_DUR },           // tile
     },
     // CLOUD_FLUFFY,
     { "white fluffiness",  nullptr,             // terse, verbose name
@@ -725,11 +724,11 @@ void check_place_cloud(cloud_type cl_type, const coord_def& p, int lifetime,
     place_cloud(cl_type, p, lifetime, agent, spread_rate, excl_rad);
 }
 
-static bool _cloud_is_stronger(cloud_type ct, const cloud_struct& cloud)
+bool cloud_is_stronger(cloud_type ct, const cloud_struct& cloud)
 {
-    return (is_harmless_cloud(cloud.type) &&
-                (!is_opaque_cloud(cloud.type) || is_opaque_cloud(ct)))
+    return (is_harmless_cloud(cloud.type) && !is_opaque_cloud(cloud.type))
            || cloud.type == CLOUD_STEAM
+           || cloud.type == CLOUD_BLASTMOTES
            || ct == CLOUD_VORTEX; // soon gone
 }
 
@@ -807,7 +806,7 @@ void place_cloud(cloud_type cl_type, const coord_def& ctarget, int cl_range,
 
     // There's already a cloud here. See if we can overwrite it.
     const cloud_struct *cloud = cloud_at(ctarget);
-    if (cloud && !_cloud_is_stronger(cl_type, *cloud))
+    if (cloud && !cloud_is_stronger(cl_type, *cloud))
         return;
 
     // If the old cloud was opaque, may need to recalculate los. It *is*
@@ -855,7 +854,7 @@ static bool _cloud_has_negative_side_effects(cloud_type cloud)
     case CLOUD_CHAOS:
     case CLOUD_PETRIFY:
     case CLOUD_ACID:
-    case CLOUD_NEGATIVE_ENERGY:
+    case CLOUD_MISERY:
     case CLOUD_BLASTMOTES:
         return true;
     default:
@@ -937,7 +936,7 @@ bool actor_cloud_immune(const actor &act, cloud_type type)
 #endif
                    ;
         case CLOUD_MEPHITIC:
-            return act.res_poison() > 0;
+            return act.res_poison() > 0 || act.clarity();
         case CLOUD_POISON:
             return act.res_poison() > 0;
         case CLOUD_STEAM:
@@ -954,7 +953,7 @@ bool actor_cloud_immune(const actor &act, cloud_type type)
             return act.res_acid() > 0;
         case CLOUD_STORM:
             return act.res_elec() >= 3;
-        case CLOUD_NEGATIVE_ENERGY:
+        case CLOUD_MISERY:
             return act.res_negative_energy() >= 3;
         case CLOUD_VORTEX:
             return act.res_polar_vortex();
@@ -1023,7 +1022,7 @@ static int _actor_cloud_resist(const actor *act, const cloud_struct &cloud)
         return act->res_acid();
     case CLOUD_STORM:
         return act->res_elec();
-    case CLOUD_NEGATIVE_ENERGY:
+    case CLOUD_MISERY:
         return act->res_negative_energy();
 
     default:
@@ -1168,17 +1167,39 @@ static bool _actor_apply_cloud_side_effects(actor *act,
         act->acid_corrode(5);
         return true;
 
-    case CLOUD_NEGATIVE_ENERGY:
+    case CLOUD_MISERY:
     {
+        int dam = 0;
         actor* agent = cloud.agent();
-        if (act->drain(agent, final_damage))
+
+        // Take 10% of player max hp per tick and 15% for monsters.
+        if (act->is_player())
+            dam = max(1, div_rand_round(get_real_hp(true, false), 10));
+        else
         {
+            monster* mon = act->as_monster();
+            dam = max(1, div_rand_round(mon->max_hit_points * 3, 20));
+        }
+
+        dam = resist_adjust_damage(act, BEAM_NEG, dam);
+        dam = timescale_damage(act, dam);
+
+        if (dam > 0)
+        {
+            act->hurt(agent, dam, BEAM_NEG, KILLED_BY_CLOUD, "", cloud.cloud_name(true));
             if (cloud.whose == KC_YOU)
                 did_god_conduct(DID_EVIL, 5 + random2(3));
-            return true;
         }
-        break;
+
+        return true;
     }
+    break;
+
+    case CLOUD_BLASTMOTES:
+        if (act->props.exists(BLASTMOTE_IMMUNE_KEY))
+            return false;
+        explode_blastmotes_at(cloud.pos);
+        return true;
 
     default:
         break;
@@ -1240,7 +1261,6 @@ static int _actor_cloud_damage(const actor *act,
     case CLOUD_STEAM:
     case CLOUD_SPECTRAL:
     case CLOUD_ACID:
-    case CLOUD_NEGATIVE_ENERGY:
     case CLOUD_STORM:
         final_damage =
             _cloud_damage_output(act, _cloud2beam(cloud.type),
@@ -1386,7 +1406,7 @@ bool is_damaging_cloud(cloud_type type, bool accept_temp_resistances, bool yours
         // [ds] Yes, this is an ugly kludge: temporarily hide
         // durations and transforms.
         unwind_var<durations_t> old_durations(you.duration);
-        unwind_var<transformation> old_form(you.form, transformation::none);
+        unwind_var<transformation> old_form(you.form, you.default_form);
         you.duration.init(0);
         return is_damaging_cloud(type, true, yours);
     }
@@ -1422,7 +1442,7 @@ static bool _mons_avoids_cloud(const monster* mons, const cloud_struct& cloud,
     // Berserk monsters are less careful and will blindly plow through any
     // dangerous cloud, just to kill you. {due}
     // Fleeing monsters are heedless and will make very poor life choices.
-    if (!extra_careful && (mons->berserk_or_insane() || mons_is_fleeing(*mons)))
+    if (!extra_careful && (mons->berserk_or_frenzied() || mons_is_fleeing(*mons)))
         return false;
 
     switch (cloud.type)
@@ -1876,5 +1896,19 @@ void surround_actor_with_cloud(const actor* a, cloud_type cloud)
         if (mons && mons->alive() && mons_aligned(a, mons))
             continue;
         place_cloud(cloud, *ai, 2 + random2(6), a);
+    }
+}
+
+bool cloud_is_removed(cloud_type cloud)
+{
+    switch (cloud)
+    {
+#if TAG_MAJOR_VERSION == 34
+    case CLOUD_GLOOM:
+    case CLOUD_EMBERS:
+        return true;
+#endif
+    default:
+        return false;
     }
 }

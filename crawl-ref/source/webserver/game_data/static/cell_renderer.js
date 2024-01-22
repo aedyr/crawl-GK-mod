@@ -837,6 +837,8 @@ function ($, view_data, gui, main, tileinfo_player, icons, dngn, enums,
                             this.draw_dngn(dngn.THREAT_TOUGH, x, y);
                         else if (fg.NASTY)
                             this.draw_dngn(dngn.THREAT_NASTY, x, y);
+                        else if (fg.UNUSUAL)
+                            this.draw_dngn(dngn.THREAT_UNUSUAL, x, y);
 
                         if (cell.highlighted_summoner)
                             this.draw_dngn(dngn.HALO_SUMMONER, x, y);
@@ -934,7 +936,12 @@ function ($, view_data, gui, main, tileinfo_player, icons, dngn, enums,
                 this.draw_icon(icons.NEUTRAL, x, y, undefined, undefined, img_scale);
 
             var status_shift = 0;
-            if (fg.STAB)
+            if (fg.PARALYSED)
+            {
+                this.draw_icon(icons.PARALYSED, x, y, undefined, undefined, img_scale);
+                status_shift += 12;
+            }
+            else if (fg.STAB)
             {
                 this.draw_icon(icons.STAB_BRAND, x, y, undefined, undefined, img_scale);
                 status_shift += 12;
@@ -1079,6 +1086,7 @@ function ($, view_data, gui, main, tileinfo_player, icons, dngn, enums,
                 case icons.POSSESSABLE:
                 case icons.PARTIALLY_CHARGED:
                 case icons.FULLY_CHARGED:
+                case icons.VITRIFIED:
                     this.draw_icon(idx, x, y, ofsx, ofsy, img_scale);
                     return 6;
                 case icons.CONC_VENOM:
@@ -1091,12 +1099,11 @@ function ($, view_data, gui, main, tileinfo_player, icons, dngn, enums,
                 case icons.ANGUISH:
                 case icons.FIRE_VULN:
                 case icons.RESISTANCE:
-                case icons.SIMULACRUM:
+                case icons.GHOSTLY:
                 case icons.MALMUTATED:
                     this.draw_icon(idx, x, y, ofsx, ofsy, img_scale);
                     return 8;
                 case icons.RECALL:
-                case icons.REFLECTING:
                 case icons.TELEPORTING:
                     this.draw_icon(idx, x, y, ofsx, ofsy, img_scale);
                     return 9;
@@ -1108,10 +1115,15 @@ function ($, view_data, gui, main, tileinfo_player, icons, dngn, enums,
                 case icons.ANTIMAGIC:
                 case icons.REPEL_MISSILES:
                 case icons.INJURY_BOND:
+                case icons.GLOW_LIGHT:
+                case icons.GLOW_HEAVY:
+                case icons.BULLSEYE:
+                case icons.CURSE_OF_AGONY:
                     this.draw_icon(idx, x, y, ofsx, ofsy, img_scale);
                     return 10;
                 case icons.CONSTRICTED:
                 case icons.VILE_CLUTCH:
+                case icons.PAIN_BOND:
                     this.draw_icon(idx, x, y, ofsx, ofsy, img_scale);
                     return 11;
             }

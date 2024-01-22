@@ -32,6 +32,7 @@
 #include "state.h"
 #include "stringutil.h"
 #include "tag-version.h"
+#include "transform.h" // form_for_talisman
 #include "unicode.h"
 
 // Putting this here since art-enum.h is generated.
@@ -72,13 +73,8 @@ static bool _god_fits_artefact(const god_type which_god, const item_def &item,
 
     if (is_evil_god(which_god) && brand == SPWPN_HOLY_WRATH)
         return false;
-    else if (is_good_god(which_god)
-             && (brand == SPWPN_DRAINING
-                 || brand == SPWPN_PAIN
-                 || brand == SPWPN_VAMPIRISM
-                 || brand == SPWPN_REAPING
-                 || brand == SPWPN_CHAOS
-                 || is_demonic(item)))
+    if (is_good_god(which_god)
+        && (is_evil_brand(brand) || is_demonic(item)))
     {
         return false;
     }
@@ -263,7 +259,7 @@ bool is_random_artefact(const item_def &item)
  *  @param item The item to be checked.
  *  @param which The unrand enum to be checked against (default 0).
  *  @returns true if item is an unrand, and if which is not 0, if it is the unrand
- *           specfied by enum in which.
+ *           specified by enum in which.
  */
 bool is_unrandom_artefact(const item_def &item, int which)
 {
@@ -300,12 +296,13 @@ static void _set_unique_item_existence(int art, bool exists)
 
     const unique_item_status_type status = !exists
         ? UNIQ_NOT_EXISTS
-        : !crawl_state.generating_level
+        : !crawl_state.generating_level // acquirement, gozag shops, ...
                 // treat unrands that generate in these branches as if they
                 // were acquired. TODO: there's a potential bug here if every
-                // octopus king ring generates and the last is acquired. Also,
-                // I suspect that these getting lost in the abyss isn't handled
-                // right
+                // octopus king ring generates and the last is acquired.
+                // note that unrands that generate in the abyss and get left
+                // there will convert to UNIQ_LOST_IN_ABYSS, but they don't
+                // get this automatically.
                 || level_id::current().branch == BRANCH_TROVE
                 || level_id::current().branch == BRANCH_ABYSS
             ? UNIQ_EXISTS_NONLEVELGEN
@@ -343,19 +340,32 @@ static void _populate_armour_intrinsic_artps(const armour_type arm,
     proprt[ARTP_REGENERATION] += armour_type_prop(arm, ARMF_REGENERATION);
 }
 
-static map<stave_type, artefact_prop_type> staff_artps = {
-    { STAFF_FIRE,   ARTP_FIRE },
-    { STAFF_COLD,   ARTP_COLD },
-    { STAFF_POISON, ARTP_POISON },
-    { STAFF_DEATH,  ARTP_NEGATIVE_ENERGY },
-    { STAFF_AIR,    ARTP_ELECTRICITY },
+static map<stave_type, artefact_prop_type> staff_resist_artps = {
+    { STAFF_FIRE,    ARTP_FIRE },
+    { STAFF_COLD,    ARTP_COLD },
+    { STAFF_ALCHEMY, ARTP_POISON },
+    { STAFF_DEATH,   ARTP_NEGATIVE_ENERGY },
+    { STAFF_AIR,     ARTP_ELECTRICITY },
     // nothing for conj or earth
+};
+
+static map<stave_type, artefact_prop_type> staff_enhancer_artps = {
+    { STAFF_FIRE,           ARTP_ENHANCE_FIRE },
+    { STAFF_COLD,           ARTP_ENHANCE_ICE },
+    { STAFF_ALCHEMY,        ARTP_ENHANCE_ALCHEMY },
+    { STAFF_DEATH,          ARTP_ENHANCE_NECRO },
+    { STAFF_AIR,            ARTP_ENHANCE_AIR },
+    { STAFF_CONJURATION,    ARTP_ENHANCE_CONJ },
+    { STAFF_EARTH,          ARTP_ENHANCE_EARTH },
 };
 
 static void _populate_staff_intrinsic_artps(stave_type staff,
                                             artefact_properties_t &proprt)
 {
-    artefact_prop_type *prop = map_find(staff_artps, staff);
+    artefact_prop_type *prop = map_find(staff_resist_artps, staff);
+    if (prop)
+        proprt[*prop] = 1;
+    prop = map_find(staff_enhancer_artps, staff);
     if (prop)
         proprt[*prop] = 1;
 }
@@ -513,9 +523,9 @@ static void _add_randart_weapon_brand(const item_def &item,
     else
     {
         item_props[ARTP_BRAND] = random_choose_weighted(
-            47, SPWPN_HEAVY,
             47, SPWPN_FLAMING,
             47, SPWPN_FREEZING,
+            26, SPWPN_HEAVY,
             26, SPWPN_VENOM,
             26, SPWPN_DRAINING,
             13, SPWPN_HOLY_WRATH,
@@ -533,6 +543,31 @@ static void _add_randart_weapon_brand(const item_def &item,
     // no brand = magic flag to reject and retry
     if (!is_weapon_brand_ok(item_type, item_props[ARTP_BRAND], true))
         item_props[ARTP_BRAND] = SPWPN_NORMAL;
+}
+
+static bool _talisman_conflicts(const item_def &it, artefact_prop_type prop)
+{
+    if (prop == ARTP_FLY)
+        return form_can_fly(form_for_talisman(it));
+
+    // Yuck! TODO: find a way to deduplicate this.
+    switch (it.sub_type)
+    {
+    case TALISMAN_STATUE:
+    case TALISMAN_STORM:
+        return prop == ARTP_POISON || prop == ARTP_ELECTRICITY;
+    case TALISMAN_DRAGON:
+    case TALISMAN_SERPENT:
+        return prop == ARTP_POISON;
+    case TALISMAN_DEATH:
+        return prop == ARTP_POISON || prop == ARTP_NEGATIVE_ENERGY;
+    case TALISMAN_BEAST:
+    case TALISMAN_FLUX:
+    case TALISMAN_MAW:
+    case TALISMAN_BLADE:
+    default:
+        return false;
+    }
 }
 
 /**
@@ -557,6 +592,9 @@ static bool _artp_can_go_on_item(artefact_prop_type prop, const item_def &item,
     _populate_item_intrinsic_artps(item, intrinsic_proprt, _);
     if (intrinsic_proprt[prop])
         return false; // don't duplicate intrinsic props
+
+    if (item.base_type == OBJ_TALISMANS && _talisman_conflicts(item, prop))
+        return false;
 
     const object_class_type item_class = item.base_type;
     // Categorise items by whether they're quick to swap or not. Some artefact
@@ -591,6 +629,19 @@ static bool _artp_can_go_on_item(artefact_prop_type prop, const item_def &item,
         case ARTP_PREVENT_SPELLCASTING:
             if (item.is_type(OBJ_JEWELLERY, AMU_MANA_REGENERATION))
                 return false;
+            if (extant_props[ARTP_ENHANCE_CONJ]
+                || extant_props[ARTP_ENHANCE_HEXES]
+                || extant_props[ARTP_ENHANCE_SUMM]
+                || extant_props[ARTP_ENHANCE_NECRO]
+                || extant_props[ARTP_ENHANCE_TLOC]
+                || extant_props[ARTP_ENHANCE_FIRE]
+                || extant_props[ARTP_ENHANCE_ICE]
+                || extant_props[ARTP_ENHANCE_AIR]
+                || extant_props[ARTP_ENHANCE_EARTH]
+                || extant_props[ARTP_ENHANCE_ALCHEMY])
+            {
+                return false;
+            }
             // fallthrough
         case ARTP_REGENERATION:
         case ARTP_INVISIBLE:
@@ -598,14 +649,34 @@ static bool _artp_can_go_on_item(artefact_prop_type prop, const item_def &item,
         case ARTP_RAMPAGING:
             // only on items that can't be quickly swapped
             return non_swappable;
-        // prevent on armour (since it's swapped infrequently) and rings (since
-        // 2 slots reduces the pressure to swap)
+        // prevent on armour/talismans (since they're swapped infrequently) and
+        // rings (since 2 slots reduces the pressure to swap)
         case ARTP_FRAGILE:
             return item_class != OBJ_ARMOUR
+                   && item_class != OBJ_TALISMANS
                    && (item_class != OBJ_JEWELLERY
                        || jewellery_is_amulet(item));
+        case ARTP_DRAIN:
+        case ARTP_CONTAM:
+            return item_class != OBJ_TALISMANS; // TODO: support..?
         case ARTP_ARCHMAGI:
             return item.is_type(OBJ_ARMOUR, ARM_ROBE);
+        case ARTP_ENHANCE_CONJ:
+        case ARTP_ENHANCE_HEXES:
+        case ARTP_ENHANCE_SUMM:
+        case ARTP_ENHANCE_NECRO:
+        case ARTP_ENHANCE_TLOC:
+        case ARTP_ENHANCE_FIRE:
+        case ARTP_ENHANCE_ICE:
+        case ARTP_ENHANCE_AIR:
+        case ARTP_ENHANCE_EARTH:
+        case ARTP_ENHANCE_ALCHEMY:
+            // Maybe we should allow these for robes, too?
+            // And hats? And gloves and cloaks and scarves?
+            return !extant_props[ARTP_PREVENT_SPELLCASTING]
+                   && (item.base_type == OBJ_STAVES
+                       || item.is_type(OBJ_ARMOUR, ARM_ORB));
+
         default:
             return true;
     }
@@ -699,7 +770,7 @@ static const artefact_prop_data artp_data[] =
 #if TAG_MAJOR_VERSION == 34
     { "Hungry", ARTP_VAL_POS, 0, nullptr, nullptr, 0, 0 },// ARTP_METABOLISM,
 #endif
-    { "Contam", ARTP_VAL_POS, 20,   // ARTP_CONTAM
+    { "^Contam", ARTP_VAL_POS, 20,   // ARTP_CONTAM
         nullptr, []() { return 1; }, 0, 0 },
 #if TAG_MAJOR_VERSION == 34
     { "Acc", ARTP_VAL_ANY, 0, nullptr, nullptr, 0, 0 }, // ARTP_ACCURACY,
@@ -739,18 +810,42 @@ static const artefact_prop_data artp_data[] =
 #endif
     { "*Corrode", ARTP_VAL_BOOL, 25, // ARTP_CORRODE,
         nullptr, []() { return 1; }, 0, 0 },
-    { "Drain", ARTP_VAL_BOOL, 25, // ARTP_DRAIN,
+    { "^Drain", ARTP_VAL_BOOL, 25, // ARTP_DRAIN,
         nullptr, []() { return 1; }, 0, 0 },
     { "*Slow", ARTP_VAL_BOOL, 25, // ARTP_SLOW,
         nullptr, []() { return 1; }, 0, 0 },
-    { "Fragile", ARTP_VAL_BOOL, 30, // ARTP_FRAGILE,
+    { "^Fragile", ARTP_VAL_BOOL, 30, // ARTP_FRAGILE,
         nullptr, []() { return 1; }, 0, 0 },
     { "SH", ARTP_VAL_ANY, 0, nullptr, nullptr, 0, 0 }, // ARTP_SHIELDING,
     { "Harm", ARTP_VAL_BOOL, 25, // ARTP_HARM,
         []() {return 1;}, nullptr, 0, 0},
     { "Rampage", ARTP_VAL_BOOL, 25, // ARTP_RAMPAGING,
         []() {return 1;}, nullptr, 0, 0},
-    { "Archmagi", ARTP_VAL_BOOL, 25, // ARTP_ARCHMAGI,
+    { "Archmagi", ARTP_VAL_BOOL, 40, // ARTP_ARCHMAGI,
+        []() {return 1;}, nullptr, 0, 0},
+    { "Conj", ARTP_VAL_BOOL, 20, // ARTP_ENHANCE_CONJ,
+        []() {return 1;}, nullptr, 0, 0},
+    { "Hexes", ARTP_VAL_BOOL, 20, // ARTP_ENHANCE_HEXES,
+        []() {return 1;}, nullptr, 0, 0},
+    { "Summ", ARTP_VAL_BOOL, 20, // ARTP_ENHANCE_SUMM,
+        []() {return 1;}, nullptr, 0, 0},
+    { "Necro", ARTP_VAL_BOOL, 20, // ARTP_ENHANCE_NECRO,
+        []() {return 1;}, nullptr, 0, 0},
+    { "Tloc", ARTP_VAL_BOOL, 20, // ARTP_ENHANCE_TLOC,
+        []() {return 1;}, nullptr, 0, 0},
+#if TAG_MAJOR_VERSION == 34
+    { "Tmut", ARTP_VAL_BOOL, 0, // ARTP_ENHANCE_TMUT,
+        []() {return 1;}, nullptr, 0, 0},
+#endif
+    { "Fire", ARTP_VAL_BOOL, 20, // ARTP_ENHANCE_FIRE,
+        []() {return 1;}, nullptr, 0, 0},
+    { "Ice", ARTP_VAL_BOOL, 20, // ARTP_ENHANCE_ICE,
+        []() {return 1;}, nullptr, 0, 0},
+    { "Air", ARTP_VAL_BOOL, 20, // ARTP_ENHANCE_AIR,
+        []() {return 1;}, nullptr, 0, 0},
+    { "Earth", ARTP_VAL_BOOL, 20, // ARTP_ENHANCE_EARTH,
+        []() {return 1;}, nullptr, 0, 0},
+    { "Alchemy", ARTP_VAL_BOOL, 20, // ARTP_ENHANCE_ALCHEMY,
         []() {return 1;}, nullptr, 0, 0},
 };
 COMPILE_CHECK(ARRAYSZ(artp_data) == ARTP_NUM_PROPERTIES);
@@ -1145,11 +1240,9 @@ static string _get_artefact_type(const item_def &item, bool appear = false)
     case OBJ_STAVES: // XXX: consider a separate section?
         return "weapon";
     case OBJ_ARMOUR:
-        if (item.sub_type == ARM_ROBE)
-            return "robe";
-        if (get_item_slot(item) == EQ_BODY_ARMOUR)
-            return "body armour";
         return "armour";
+    case OBJ_TALISMANS:
+        return "talisman";
     case OBJ_JEWELLERY:
         // Distinguish between amulets and rings only in appearance.
         if (!appear)
@@ -1170,10 +1263,11 @@ static bool _pick_db_name(const item_def &item)
     {
     case OBJ_WEAPONS:
     case OBJ_ARMOUR:
+    case OBJ_STAVES:
+    case OBJ_TALISMANS:
         return coinflip();
     case OBJ_JEWELLERY:
         return one_chance_in(5);
-    case OBJ_STAVES: // "the staff of cold of Circular Reasoning" looks bad
     default:
         return false;
     }
@@ -1201,10 +1295,18 @@ bool item_type_can_be_artefact(object_class_type typ)
     case OBJ_ARMOUR:
     case OBJ_JEWELLERY:
     case OBJ_BOOKS:
+    case OBJ_TALISMANS:
         return true;
     default:
         return false;
     }
+}
+
+static string _base_name(const item_def &item)
+{
+    if (item.is_type(OBJ_TALISMANS, TALISMAN_DEATH))
+        return "death talisman"; // no talismans of death of foo
+    return item_base_name(item);
 }
 
 string make_artefact_name(const item_def &item, bool appearance)
@@ -1247,6 +1349,7 @@ string make_artefact_name(const item_def &item, bool appearance)
     // get base type
     lookup += _get_artefact_type(item, appearance);
 
+    const string base_name = _base_name(item);
     if (appearance)
     {
         string appear = getRandNameString(lookup, " appearance");
@@ -1259,13 +1362,13 @@ string make_artefact_name(const item_def &item, bool appearance)
 
         result += appear;
         result += " ";
-        result += item_base_name(item);
+        result += base_name;
         return result;
     }
 
     if (_pick_db_name(item))
     {
-        result += item_base_name(item) + " ";
+        result += base_name + " ";
 
         int tries = 100;
         string name;
@@ -1294,9 +1397,9 @@ string make_artefact_name(const item_def &item, bool appearance)
     {
         // construct a unique name
         const string st_p = make_name();
-        result += item_base_name(item);
+        result += base_name;
 
-        if (item.base_type != OBJ_STAVES && one_chance_in(3))
+        if (one_chance_in(3))
         {
             result += " of ";
             result += st_p;
@@ -1319,7 +1422,7 @@ static const unrandart_entry *_seekunrandart(const item_def &item)
 
 string get_artefact_base_name(const item_def &item, bool terse)
 {
-    string base_name = item_base_name(item);
+    string base_name = _base_name(item);
     const char* custom_type = _seekunrandart(item)->type_name;
     if (custom_type)
         base_name = custom_type;
@@ -1336,7 +1439,7 @@ string get_artefact_name(const item_def &item, bool force_known)
 {
     ASSERT(is_artefact(item));
 
-    if (item_type_known(item) || force_known)
+    if (item_ident(item, ISFLAG_KNOW_PROPERTIES) || force_known)
     {
         // print artefact's real name, if that's set
         if (item.props.exists(ARTEFACT_NAME_KEY))
@@ -1434,18 +1537,29 @@ int find_okay_unrandart(uint8_t aclass, uint8_t atype, int item_level, bool in_a
         const unique_item_status_type status =
             get_unique_item_status(index);
 
-        if (in_abyss && status != UNIQ_LOST_IN_ABYSS
-            || !in_abyss && status != UNIQ_NOT_EXISTS
-               // for acquired items, ignore them in the random calculations
-               // here and let fallback artefacts replace them. This is needed
-               // for seed stability.
-               // TODO: abyss? double check trove
-               && status != UNIQ_EXISTS_NONLEVELGEN)
+        if ((!in_abyss || status != UNIQ_LOST_IN_ABYSS)
+            && status != UNIQ_NOT_EXISTS
+            // for previously acquired items, allow generation of the index
+            // here; a fallback artefact will replace them in later steps.
+            // This is needed for seed stability.
+            && status != UNIQ_EXISTS_NONLEVELGEN)
         {
             continue;
         }
 
-        // Never randomly generated until lost in the abyss.
+        if (in_abyss && status == UNIQ_LOST_IN_ABYSS
+            && index == UNRAND_OCTOPUS_KING_RING
+            && you.octopus_king_rings == 0xff)
+        {
+            // the last octopus ring is lost in the abyss. We don't have the
+            // machinery to bring back the correct one, and it doesn't seem
+            // worth implementing. So just skip it. (TODO: clear the flag for
+            // a lost octoring on losing it?)
+            continue;
+        }
+
+        // If an item does not generate randomly, we can only produce its index
+        // here if it was lost in the abyss
         if ((!in_abyss || status != UNIQ_LOST_IN_ABYSS)
             && entry->flags & UNRAND_FLAG_NOGEN)
         {
@@ -1641,6 +1755,7 @@ bool make_item_randart(item_def &item, bool force_mundane)
     case OBJ_ARMOUR:
     case OBJ_JEWELLERY:
     case OBJ_STAVES:
+    case OBJ_TALISMANS:
         break;
     default:
         return false;
@@ -1712,7 +1827,7 @@ static string _ashenzari_artefact_name(item_def &item)
 
     item.orig_monnum = old_orig;
 
-    return item_base_name(item) + " " + (name.empty() ? "of Ashenzari" : name);
+    return _base_name(item) + " " + (name.empty() ? "of Ashenzari" : name);
 }
 
 void make_ashenzari_randart(item_def &item)
@@ -1804,7 +1919,9 @@ static void _make_octoring(item_def &item)
 {
     if (you.octopus_king_rings == 0xff)
     {
-        ASSERT(you.wizard || you.suppress_wizard || crawl_state.test);
+        // possible this is too narrow: if this causes unexpected wizmode
+        // crashes, just back off to asserting you.wizard.
+        ASSERT(crawl_state.prev_cmd == CMD_WIZARD);
         item.sub_type = octoring_types[random2(8)];
         return;
     }

@@ -95,6 +95,7 @@ public:
         int battlecharge;      ///< Charges of battlesphere
         int move_spurt;        ///< Sixfirhy/jiangshi/kraken black magic
         int steps_remaining;   ///< Foxfire remaining moves
+        int blazeheart_heat;   ///< Number of checks before golem cools
         mid_t tentacle_connect;///< mid of monster this tentacle is
                                //   connected to: for segments, this is the
                                //   tentacle; for tentacles, the head.
@@ -152,13 +153,14 @@ public:
         override;
     bool is_perm_summoned() const override;
     bool has_action_energy() const;
-    bool may_have_action_energy() const;
-    bool outpaced_by_player() const;
     void drain_action_energy();
+    bool matches_player_speed() const;
+    int  player_speed_energy() const;
     void check_redraw(const coord_def &oldpos, bool clear_tiles = true) const;
     void apply_location_effects(const coord_def &oldpos,
                                 killer_type killer = KILL_NONE,
                                 int killernum = -1) override;
+    void did_deliberate_movement() override;
     void self_destruct() override;
 
     void set_position(const coord_def &c) override;
@@ -217,15 +219,6 @@ public:
 
     void apply_enchantments();
 
-    bool can_drink() const;
-    bool can_drink_potion(potion_type ptype) const;
-    bool should_drink_potion(potion_type ptype) const;
-    bool drink_potion_effect(potion_type pot_eff, bool card = false);
-
-    bool can_evoke_jewellery(jewellery_type jtype) const;
-    bool should_evoke_jewellery(jewellery_type jtype) const;
-    bool evoke_jewellery_effect(jewellery_type jtype);
-
     void timeout_enchantments(int levels);
 
     bool is_travelling() const;
@@ -247,6 +240,7 @@ public:
     void set_ghost(const ghost_demon &ghost);
     void ghost_init(bool need_pos = true);
     void ghost_demon_init();
+    void inugami_init();
     void uglything_init(bool only_mutate = false);
     void uglything_mutate(colour_t force_colour = COLOUR_UNDEF);
     void destroy_inventory();
@@ -356,7 +350,7 @@ public:
     bool go_berserk(bool intentional, bool potion = false) override;
     bool go_frenzy(actor *source);
     bool berserk() const override;
-    bool berserk_or_insane() const;
+    bool berserk_or_frenzied() const;
     bool can_mutate() const override;
     bool can_safely_mutate(bool temp = true) const override;
     bool can_polymorph() const override;
@@ -373,11 +367,11 @@ public:
 
     monster_type mons_species(bool zombie_base = false) const override;
 
-    mon_holy_type holiness(bool /*temp*/ = true) const override;
+    mon_holy_type holiness(bool /*temp*/ = true, bool /*incl_form*/ = true) const override;
     bool undead_or_demonic(bool /*temp*/ = true) const override;
     bool evil() const override;
     bool is_holy() const override;
-    bool is_nonliving(bool /*temp*/ = true) const override;
+    bool is_nonliving(bool /*temp*/ = true, bool /*incl_form*/ = true) const override;
     int how_unclean(bool check_god = true) const;
     int known_chaos(bool check_spells_god = false) const;
     int how_chaotic(bool check_spells_god = false) const override;
@@ -399,6 +393,7 @@ public:
     bool res_polar_vortex() const override;
     bool res_petrify(bool /*temp*/ = true) const override;
     int res_constrict() const override;
+    resists_t all_resists() const;
     int willpower() const override;
     bool no_tele(bool blink = false, bool /*temp*/ = true) const override;
     bool res_corr(bool /*allow_random*/ = true, bool temp = true) const override;
@@ -427,6 +422,8 @@ public:
     bool confused_by_you() const;
     bool caught() const override;
     bool asleep() const override;
+    bool sleepwalking() const;
+    bool unswappable() const;
     bool backlit(bool self_halo = true, bool /*temp*/ = true) const override;
     bool umbra() const override;
     int halo_radius() const override;
@@ -499,6 +496,7 @@ public:
     void put_to_sleep(actor *attacker, int power = 0, bool hibernate = false)
         override;
     void weaken(actor *attacker, int pow) override;
+    bool strip_willpower(actor *attacker, int dur, bool quiet = false) override;
     void check_awaken(int disturbance) override;
     int beam_resists(bolt &beam, int hurted, bool doEffects, string source = "")
         override;
@@ -509,8 +507,8 @@ public:
 
 
     bool    shielded() const override;
+    int     shield_class() const;
     int     shield_bonus() const override;
-    int     shield_block_penalty() const override;
     void    shield_block_succeeded(actor *attacker) override;
     int     shield_bypass_ability(int tohit) const override;
     bool    missile_repulsion() const override;
@@ -534,7 +532,7 @@ public:
 
     int action_energy(energy_use_type et) const;
 
-    bool do_shaft(bool check_terrain = true) override;
+    bool do_shaft() override;
     bool has_spell_of_type(spschool discipline) const;
 
     void bind_melee_flags();

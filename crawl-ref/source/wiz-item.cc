@@ -11,6 +11,7 @@
 
 #include "acquire.h"
 #include "act-iter.h"
+#include "areas.h"
 #include "artefact.h"
 #include "art-enum.h"
 #include "cio.h"
@@ -102,7 +103,7 @@ void wizard_create_spec_object()
     {
         mprf(MSGCH_PROMPT, ") - weapons     ( - missiles  [ - armour  / - wands    ?  - scrolls");
         mprf(MSGCH_PROMPT, "= - jewellery   ! - potions   : - books   | - staves   }  - miscellany");
-        mprf(MSGCH_PROMPT, "X - corpses     $ - gold    0  - the Orb");
+        mprf(MSGCH_PROMPT, "%% - talismans   X - corpses   $ - gold    0  - the Orb");
         mprf(MSGCH_PROMPT, "ESC - exit");
 
         msgwin_prompt("What class of item? ");
@@ -533,7 +534,7 @@ void wizard_value_item()
 /**
  * Generate every unrand (including removed ones).
  *
- * @param override_unique if true, will generate unrands that have alread
+ * @param override_unique if true, will generate unrands that have already
  * placed in the game. If false, will generate fallback randarts for any
  * unrands that have already placed.
  */
@@ -1207,11 +1208,10 @@ static void _debug_acquirement_stats(FILE *ostat)
                 "hexes",
                 "fire magic",
                 "ice magic",
-                "transmutation",
                 "necromancy",
                 "summoning",
                 "translocation",
-                "poison magic",
+                "alchemy",
                 "earth magic",
                 "air magic",
             };
@@ -1532,6 +1532,19 @@ static void _debug_rap_stats(FILE *ostat)
         "ARTP_HARM",
         "ARTP_RAMPAGING",
         "ARTP_ARCHMAGI",
+        "ARTP_ENHANCE_CONJ",
+        "ARTP_ENHANCE_HEXES",
+        "ARTP_ENHANCE_SUMM",
+        "ARTP_ENHANCE_NECRO",
+        "ARTP_ENHANCE_TLOC",
+#if TAG_MAJOR_VERSION == 34
+        "ARTP_ENHANCE_TMUT",
+#endif
+        "ARTP_ENHANCE_FIRE",
+        "ARTP_ENHANCE_ICE",
+        "ARTP_ENHANCE_AIR",
+        "ARTP_ENHANCE_EARTH",
+        "ARTP_ENHANCE_ALCHEMY",
     };
     COMPILE_CHECK(ARRAYSZ(rap_names) == ARTP_NUM_PROPERTIES);
 
@@ -1674,5 +1687,15 @@ void wizard_recharge_evokers()
         evoker_debt(dummy.sub_type) = 0;
     }
     mpr("Evokers recharged.");
+}
+
+void wizard_unobtain_runes_and_orb()
+{
+    you.runes.reset();
+
+    you.chapter = CHAPTER_ORB_HUNTING;
+    invalidate_agrid(true);
+
+    mpr("Unobtained all runes and the Orb of Zot.");
 }
 #endif

@@ -28,7 +28,7 @@ class TerminalRecorder(object):
         Args:
             command: argv of command to run, eg [cmd, args, ...]
             env_vars: dictionary of environment variables to set. The variables
-                COLUMNS, LINES, and TERM cannot be overriden.
+                COLUMNS, LINES, and TERM cannot be overridden.
         """
         self.command = command
         self.ttyrec = None
@@ -61,6 +61,9 @@ class TerminalRecorder(object):
             self.write_ttyrec_chunk(id_header, flush=True)
 
         self._spawn()
+
+    def is_started(self):
+        return self.pid is not None and self.pid != 0
 
     def _spawn(self):
         self.errpipe_read, errpipe_write = os.pipe()
@@ -133,7 +136,11 @@ class TerminalRecorder(object):
                 return
 
             if len(buf) > 0:
-                self.write_ttyrec_chunk(buf)
+                try:
+                    self.write_ttyrec_chunk(buf)
+                except OSError as e:
+                    # should something more happen?
+                    self.logger.error("Failed to write ttyrec chunk! (%s)" % e)
 
                 if self.activity_callback:
                     self.activity_callback()
@@ -210,6 +217,8 @@ class TerminalRecorder(object):
 
 
     def send_signal(self, signal):
+        if not self.is_started():
+            raise RuntimeError("Can't send a signal without a child process to send it to!")
         os.kill(self.pid, signal)
 
     def poll(self):
@@ -237,6 +246,9 @@ class TerminalRecorder(object):
 
                 if self.end_callback:
                     self.end_callback()
+
+                # accessed in the default end callback for logging
+                self.pid = None
 
         return self.returncode
 

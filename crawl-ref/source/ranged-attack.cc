@@ -71,13 +71,17 @@ int ranged_attack::post_roll_to_hit_modifiers(int mhit, bool random)
 {
     int modifiers = attack::post_roll_to_hit_modifiers(mhit, random);
 
-    if (teleport)
+    if (teleport && attacker->is_monster())
+        modifiers += attacker->as_monster()->get_hit_dice() * 3 / 2;
+    // XXX: Not reflected in visible to-hit display.
+    else if (defender && attacker->is_player()
+             && you.duration[DUR_DIMENSIONAL_BULLSEYE]
+             && (mid_t)you.props[BULLSEYE_TARGET_KEY].get_int()
+                 == defender->mid)
     {
-        modifiers +=
-            (attacker->is_player())
-            ? maybe_random_div(you.attribute[ATTR_PORTAL_PROJECTILE],
-                               PPROJ_TO_HIT_DIV, random)
-            : attacker->as_monster()->get_hit_dice() * 3 / 2;
+        modifiers += maybe_random_div(
+                         calc_spell_power(SPELL_DIMENSIONAL_BULLSEYE),
+                         BULLSEYE_TO_HIT_DIV, random);
     }
 
     // Duplicates describe.cc::_to_hit_pct().
@@ -192,6 +196,8 @@ bool ranged_attack::handle_phase_blocked()
              punctuation.c_str());
     }
 
+    maybe_trigger_jinxbite();
+
     return attack::handle_phase_blocked();
 }
 
@@ -226,6 +232,8 @@ bool ranged_attack::handle_phase_dodged()
              defender_name(false).c_str(),
              attack_strength_punctuation(damage_done).c_str());
     }
+
+    maybe_trigger_jinxbite();
 
     return true;
 }
@@ -293,14 +301,19 @@ bool ranged_attack::handle_phase_hit()
                 range_used = BEAM_STOP;
             }
         }
-        else if (needs_message)
+        else
         {
-            mprf("%s %s %s%s but does no damage.",
-                 projectile->name(DESC_THE).c_str(),
-                 attack_verb.c_str(),
-                 defender->name(DESC_THE).c_str(),
-                 mulch_bonus() ? " and shatters," : "");
+            if (needs_message)
+            {
+                mprf("%s %s %s%s but does no damage.",
+                    projectile->name(DESC_THE).c_str(),
+                    attack_verb.c_str(),
+                    defender->name(DESC_THE).c_str(),
+                    mulch_bonus() ? " and shatters," : "");
+            }
         }
+
+        maybe_trigger_jinxbite();
     }
 
     if ((using_weapon() || throwing())
@@ -643,7 +656,6 @@ bool ranged_attack::apply_missile_brand()
         break;
     case SPMSL_CURARE:
         obvious_effect = curare_actor(attacker, defender,
-                                      damage_done,
                                       projectile->name(DESC_PLAIN),
                                       atk_name(DESC_A));
         break;
@@ -651,34 +663,33 @@ bool ranged_attack::apply_missile_brand()
         chaos_affects_defender();
         break;
     case SPMSL_DISPERSAL:
-        if (damage_done > 0)
+    {
+        if (defender->no_tele())
         {
-            if (defender->no_tele())
-            {
-                if (defender->is_player())
-                    canned_msg(MSG_STRANGE_STASIS);
-            }
-            else
-            {
-                coord_def pos, pos2;
-                const bool no_sanct = defender->kill_alignment() == KC_OTHER;
-                if (random_near_space(defender, defender->pos(), pos, false,
-                                      no_sanct)
-                    && random_near_space(defender, defender->pos(), pos2, false,
-                                         no_sanct))
-                {
-                    const coord_def from = attacker->pos();
-                    if (grid_distance(pos2, from) > grid_distance(pos, from))
-                        pos = pos2;
-
-                    if (defender->is_player())
-                        defender->blink_to(pos);
-                    else
-                        defender->as_monster()->blink_to(pos, false, false);
-                }
-            }
+            if (defender->is_player())
+                canned_msg(MSG_STRANGE_STASIS);
+            break;
         }
+
+        coord_def pos, pos2;
+        const bool no_sanct = defender->kill_alignment() == KC_OTHER;
+        if (!random_near_space(defender, defender->pos(), pos, false,
+                               no_sanct)
+            || !random_near_space(defender, defender->pos(), pos2, false,
+                                  no_sanct))
+        {
+            break;
+        }
+        const coord_def from = attacker->pos();
+        if (grid_distance(pos2, from) > grid_distance(pos, from))
+            pos = pos2;
+
+        if (defender->is_player())
+            defender->blink_to(pos);
+        else
+            defender->as_monster()->blink_to(pos, false, false);
         break;
+    }
     case SPMSL_SILVER:
         special_damage = max(1 + random2(damage_done) / 3,
                              silver_damages_victim(defender, damage_done,

@@ -21,6 +21,7 @@ force_lance FORCE_LANCE
 fulminant_prism FULMINANT_PRISM
 searing_ray SEARING_RAY
 momentum_strike MOMENTUM_STRIKE
+irradiate IRRADIATE
 
 %sdir gui/spells/earth
 iron_shot IRON_SHOT
@@ -34,6 +35,7 @@ sandblast SANDBLAST
 shatter SHATTER
 statue_form STATUE_FORM
 stone_arrow STONE_ARROW
+boulder BOULDER
 
 %sdir gui/spells/enchantment
 anguish ANGUISH
@@ -51,13 +53,15 @@ mass_confusion MASS_CONFUSION
 slow SLOW
 tukimas_dance TUKIMAS_DANCE
 violent_unravelling VIOLENT_UNRAVELLING
+sigil_of_binding SIGIL_OF_BINDING
+jinxbite JINXBITE
 
 %sdir gui/spells/fire
 bolt_of_fire BOLT_OF_FIRE
 bolt_of_magma BOLT_OF_MAGMA
 fire_storm FIRE_STORM
 fireball FIREBALL
-kindle_blastsparks BLASTMOTE
+volatile_blastmotes BLASTMOTE
 ignite_poison IGNITE_POISON
 sticky_flame STICKY_FLAME
 throw_flame THROW_FLAME
@@ -91,22 +95,24 @@ animate_dead ANIMATE_DEAD
 animate_skeleton ANIMATE_SKELETON
 bolt_of_draining BOLT_OF_DRAINING
 borgnjors_revivification BORGNJORS_REVIVIFICATION
+borgnjors_vile_clutch BORGNJORS_VILE_CLUTCH
 corpse_rot CORPSE_ROT
 death_channel DEATH_CHANNEL
 deaths_door DEATHS_DOOR
 dispel_undead DISPEL_UNDEAD
 excruciating_wounds EXCRUCIATING_WOUNDS
+fugue_of_the_fallen FUGUE_OF_THE_FALLEN
 haunt HAUNT
+infestation INFESTATION
+kiss_of_death KISS_OF_DEATH
+martyrs_knell MARTYRS_KNELL
 necromutation NECROMUTATION
-pain PAIN
 necrotise NECROTISE
+pain PAIN
 simulacrum SIMULACRUM
 sublimation_of_blood SUBLIMATION_OF_BLOOD
 symbol_of_torment SYMBOL_OF_TORMENT
 vampiric_draining VAMPIRIC_DRAINING
-infestation INFESTATION
-borgnjors_vile_clutch BORGNJORS_VILE_CLUTCH
-kiss_of_death KISS_OF_DEATH
 
 %sdir gui/spells/poison
 alistairs_intoxication ALISTAIRS_INTOXICATION
@@ -121,27 +127,27 @@ poisonous_vapours POISONOUS_VAPOURS
 noxious_bog NOXIOUS_BOG
 
 %sdir gui/spells/summoning
-mass_abjuration MASS_ABJURATION
+animate_armour ANIMATE_ARMOUR
 call_canine_familiar CALL_CANINE_FAMILIAR
 call_imp CALL_IMP
 malign_gateway MALIGN_GATEWAY
+mass_abjuration MASS_ABJURATION
+monstrous_menagerie MONSTROUS_MENAGERIE
 recall RECALL
+spellforged_servitor SPELLFORGED_SERVITOR
+summon_blazeheart_golem SUMMON_BLAZEHEART_GOLEM
+summon_cactus_giant SUMMON_CACTUS_GIANT
 summon_demon SUMMON_DEMON
 summon_dragon SUMMON_DRAGON
+summon_forest SUMMON_FOREST
 summon_greater_demon SUMMON_GREATER_DEMON
 summon_horrible_things SUMMON_HORRIBLE_THINGS
 summon_hydra SUMMON_HYDRA
 summon_ice_beast SUMMON_ICE_BEAST
+summon_lightning_spire SUMMON_LIGHTNING_SPIRE
+summon_mana_viper SUMMON_MANA_VIPER
 summon_shadow_creatures SUMMON_SHADOW_CREATURES
 summon_small_mammal SUMMON_SMALL_MAMMAL
-summon_lightning_spire SUMMON_LIGHTNING_SPIRE
-summon_guardian_golem SUMMON_GUARDIAN_GOLEM
-animate_armour ANIMATE_ARMOUR
-summon_forest SUMMON_FOREST
-monstrous_menagerie MONSTROUS_MENAGERIE
-summon_mana_viper SUMMON_MANA_VIPER
-spellforged_servitor SPELLFORGED_SERVITOR
-summon_cactus_giant SUMMON_CACTUS_GIANT
 
 %sdir gui/spells/translocation
 apportation APPORTATION
@@ -155,14 +161,6 @@ teleport_other TELEPORT_OTHER
 gravitas GRAVITAS
 manifold_assault MANIFOLD_ASSAULT
 electric_charge ELECTRIC_CHARGE
-
-%sdir gui/spells/transmutation
-blade_hands BLADE_HANDS
-beastly_appendage BEASTLY_APPENDAGE
-irradiate IRRADIATE
-storm_form STORM_FORM
-dragon_form DRAGON_FORM
-wereblood WEREBLOOD
 
 # item-based spells
 %sdir gui/spells/misc
@@ -179,8 +177,9 @@ bolt_energy ENERGY_BOLT
 generic GENERIC_MONSTER_SPELL
 air_elementals AIR_ELEMENTALS
 awaken_vines AWAKEN_VINES
+battlecry BATTLECRY
 blink_other BLINK_OTHER
-brain_feed BRAIN_FEED
+brain_bite BRAIN_BITE
 call_down_damnation CALL_DOWN_DAMNATION
 cantrip CANTRIP
 cold_breath COLD_BREATH

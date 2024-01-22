@@ -428,11 +428,17 @@ NORETURN static void _launch_game()
         msg::stream << "<yellow>Welcome" << (game_start? "" : " back") << ", "
                     << you.your_name << " the "
                     << species::name(you.species)
-                    << " " << get_job_name(you.char_class) << ".</yellow>"
-                    << endl;
+                    << " " << get_job_name(you.char_class) << ".</yellow>";
         // TODO: seeded sprint?
         if (crawl_state.type == GAME_TYPE_CUSTOM_SEED)
-            msg::stream << "<white>" << seed_description() << "</white>" << endl;
+            msg::stream << endl << "<white>" << seed_description() << "</white>";
+        else
+        {
+            const string type_name = crawl_state.game_type_name();
+            if (!type_name.empty())
+                msg::stream << "<white> [" << type_name << "]</white>";
+        }
+        msg::stream << endl;
     }
 
 #ifdef USE_TILE
@@ -572,11 +578,13 @@ static void _show_commandline_options_help()
     puts("      Defaults to entire dungeon; same level syntax as -mapstat.");
     puts("  -iters <num>        For -mapstat and -objstat, set the number of "
          "iterations");
-    puts("  -force-map <map>    For -mapstat and -objstat, alway choose the "
+    puts("  -force-map <map>    For -mapstat and -objstat, always choose the "
          "      given map on every level.");
 #endif
     puts("");
     puts("Miscellaneous options:");
+    puts("  -builddb         don't start the game; rebuild the .des cache and exit");
+    puts("  -reset-cache     force a full rebuild of the .des cache");
     puts("  -dump-maps       write map Lua to stderr when parsing .des files");
 #ifndef TARGET_OS_WINDOWS
     puts("  -gdb/-no-gdb     produce gdb backtrace when a crash happens (default:on)");
@@ -834,12 +842,15 @@ static bool _cmd_is_repeatable(command_type cmd, bool is_again = false)
     case CMD_MEMORISE_SPELL:
     case CMD_EXPLORE:
     case CMD_INTERLEVEL_TRAVEL:
+    case CMD_UNEQUIP:
+    case CMD_REMOVE_ARMOUR:
+    case CMD_EQUIP:
+    case CMD_WEAR_ARMOUR:
         mpr("You can't repeat multi-turn commands.");
         return false;
 
     // Miscellaneous non-repeatable commands.
     case CMD_TOGGLE_AUTOPICKUP:
-    case CMD_TOGGLE_TRAVEL_SPEED:
     case CMD_TOGGLE_SOUND:
     case CMD_ADJUST_INVENTORY:
     case CMD_QUIVER_ITEM:
@@ -1064,6 +1075,10 @@ static void _input()
         update_screen();
     }
 
+    if (you.props.exists(DREAMSHARD_KEY))
+        you.props.erase(DREAMSHARD_KEY);
+    crawl_state.potential_pursuers.clear();
+
     apply_exp();
 
     // Unhandled things that should have caused death.
@@ -1078,7 +1093,6 @@ static void _input()
                                       "repetition.");
         crawl_state.prev_cmd = CMD_NO_CMD;
         flush_prev_message();
-        getchm();
         return;
     }
 
@@ -1369,7 +1383,8 @@ static bool _can_take_stairs(dungeon_feature_type ftype, bool down,
     }
 
     // Rune locks
-    switch (ftype) {
+    switch (ftype)
+    {
     case DNGN_EXIT_VAULTS:
         if (runes_in_pack() < 1)
         {
@@ -1378,7 +1393,7 @@ static bool _can_take_stairs(dungeon_feature_type ftype, bool down,
         }
         break;
     case DNGN_ENTER_ZOT:
-        if (runes_in_pack() < 3)
+        if (runes_in_pack() < 3 && !crawl_state.game_is_descent())
         {
             mpr("You need at least three runes to enter the Realm of Zot.");
             return false;
@@ -1419,6 +1434,13 @@ static bool _prompt_stairs(dungeon_feature_type ygrd, bool down, bool shaft)
 {
     // Certain portal types always carry warnings.
     if (!prompt_dangerous_portal(ygrd))
+    {
+        canned_msg(MSG_OK);
+        return false;
+    }
+
+    // Descent mode prompts for "atypical" branch order that skips content
+    if (crawl_state.game_is_descent() && !prompt_descent_shortcut(ygrd))
     {
         canned_msg(MSG_OK);
         return false;
@@ -1476,7 +1498,8 @@ static bool _prompt_stairs(dungeon_feature_type ygrd, bool down, bool shaft)
         return false;
     }
 
-    if (!down && player_in_branch(BRANCH_ZOT) && you.depth == 5
+    if (!down && player_in_branch(BRANCH_ZOT)
+        && you.depth == brdepth[BRANCH_ZOT]
         && you.chapter == CHAPTER_ANGERED_PANDEMONIUM)
     {
         if (!yesno("Really leave the Orb behind?", false, 'n'))
@@ -1630,6 +1653,8 @@ static void _take_stairs(bool down)
         tag_followers(); // Only those beside us right now can follow.
         if (down)
             start_delay<DescendingStairsDelay>(1);
+        else if (crawl_state.game_is_descent())
+            up_stairs();
         else
             start_delay<AscendingStairsDelay>(1);
         id_floor_items();
@@ -1672,7 +1697,7 @@ static void _experience_check()
         you.lives < 2 ?
              mprf("You'll get an extra life in %d.%02d levels' worth of XP.", perc / 100, perc % 100) :
              mprf("If you died right now, you'd get an extra life in %d.%02d levels' worth of XP.",
-             (perc / 100) + 1 , perc % 100);
+             perc / 100 , perc % 100);
     }
 
     handle_real_time();
@@ -1692,25 +1717,13 @@ static void _experience_check()
                         << " turns if you stay in this branch and explore no"
                         << " new floors.";
         }
-        msg::stream << endl;
+        msg::stream << endl << gem_status();
     }
 
 #ifdef DEBUG_DIAGNOSTICS
     mprf(MSGCH_DIAGNOSTICS, "Turns spent on this level: %d",
          env.turns_on_level);
 #endif
-}
-
-static void _toggle_travel_speed()
-{
-    you.travel_ally_pace = !you.travel_ally_pace;
-    if (you.travel_ally_pace)
-        mpr("You pace your travel speed to your slowest ally.");
-    else
-    {
-        mpr("You travel at normal speed.");
-        you.running.travel_speed = 0;
-    }
 }
 
 static void _do_rest()
@@ -1724,7 +1737,7 @@ static void _do_rest()
     }
 #endif
 
-    if (bezotted() && !yesno("Really rest while Zot is near?", false, 'n'))
+    if (should_fear_zot() && !yesno("Really rest while Zot is near?", false, 'n'))
     {
         canned_msg(MSG_OK);
         return;
@@ -2104,8 +2117,6 @@ void process_command(command_type cmd, command_type prev_cmd)
         mprf("Sound effects are now %s.", Options.sounds_on ? "on" : "off");
         break;
 #endif
-
-    case CMD_TOGGLE_TRAVEL_SPEED:        _toggle_travel_speed(); break;
 
         // Map commands.
     case CMD_CLEAR_MAP:       clear_map_or_travel_trail(); break;
@@ -2550,6 +2561,9 @@ void world_reacts()
 
     crawl_state.clear_mon_acting();
 
+    if (you.time_taken)
+        descent_crumble_stairs();
+
     if (!crawl_state.game_is_arena())
     {
         you.turn_is_over = true;
@@ -2746,6 +2760,10 @@ static void _swing_at_target(coord_def move)
 {
     dist target;
     target.target = you.pos() + move;
+
+    // Don't warn the player "too injured to fight recklessly" when they
+    // explicitly request an attack.
+    unwind_bool autofight_ok(crawl_state.skip_autofight_check, true);
     // this lets ranged weapons work via this command also -- good or bad?
     quiver::get_primary_action()->trigger(target);
 }

@@ -73,6 +73,7 @@ defaults = {
     'max_connections': 100,
     'connection_timeout': 600,
     'max_idle_time': 5 * 60 * 60,
+    'max_lobby_idle_time': 3 * 60 * 60,
     'use_gzip': True,
     'kill_timeout': 10,
     'nick_regex': r"^[a-zA-Z0-9]{3,20}$",
@@ -291,7 +292,7 @@ class GameConfig(MutableMapping):
         t = self.get_defaults()
         while isinstance(t, GameConfig) and t.template:
             if t.id in seen:
-                logging.error("Loop in tempate dependencies from game %s: %s", self.id, t.id)
+                logging.error("Loop in template dependencies from game %s: %s", self.id, t.id)
                 return False
             seen.add(t.id)
             t = t.get_defaults()

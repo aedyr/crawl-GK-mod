@@ -102,7 +102,7 @@ species-dependent:
 
 Major:
 
-- The amount of hit points you get each level
+- The amount of health you get each level
 - Your rate of skill advancement
 - Your initial primary attributes (this also depends on background)
 - Various special abilities, powers and limitations
@@ -168,14 +168,14 @@ numbers. These describe different aspects of the character.
 Health
   A measure of life force. Synonymous with hit points and sometimes abbreviated
   as HP. You die if your health drops to zero or less (although you can die in
-  other ways, too). The main screen shows both your current and maximum hit
-  points. Usually, you regain hit points slowly over time. Pressing '5' or
-  Shift-Num-5 lets you wait for a longer period.
+  other ways, too). The main screen shows both your current and maximum health.
+  Usually, you regain health slowly over time. Pressing '5' or Shift-Num-5 lets
+  you wait for a longer period.
 
 Magic
   A measure of magic or other intrinsic power. This is used primarily for
   spellcasting, but is sometimes also used for the evoking and invoking of many
-  other special abilities. They are displayed in the same way as hit points;
+  other special abilities. They are displayed in the same way as health;
   nothing bad happens if these drop to zero, except, of course, that you can't
   cast any spells. Resting also restores your reserves of magic.
 
@@ -228,7 +228,7 @@ through the dungeon is displayed.
 
 Experience Level
   Abbreviated to "XL". Starting characters have experience level 1; the highest
-  possible level is 27. Gaining a level nets additional hit and magic points,
+  possible level is 27. Gaining a level nets additional health and magic points,
   and will grant spell slots and sometimes primary attributes.
 
 Place
@@ -269,11 +269,11 @@ Willpower
 
 Size
   Different species have different sizes: Spriggans and Felids are very small;
-  Kobolds are small; Ogres and Trolls are large; Nagas and Armataurs are large
-  with a medium torso; all other species are medium-sized. Many transmutations
-  will change your size. Size affects your evasion: the smaller your character,
-  the more evasive it is. On the other hand, characters of larger than medium
-  size do not suffer the usual attack penalties when standing in shallow water.
+  Kobolds are small; Oni and Trolls are large; Nagas and Armataurs are large
+  with a medium torso; all other species are medium-sized. Many talismans will
+  change your size. Size affects your evasion: the smaller your character, the
+  more evasive it is. On the other hand, characters of larger than medium size
+  do not suffer the usual attack penalties when standing in shallow water.
   Characters of smaller than medium size will have problems with some larger
   weapons. Very small characters and large characters are not able to use most
   types of armour. Players and monsters can only constrict foes of the same size
@@ -348,8 +348,8 @@ firing.
 Resting
 ========================================
 
-If you press '5', you will rest until your hit points or magic return to full.
-You can rest for just one turn by pressing '.' or 's'.
+If you press '5', you will rest until your health or magic return to full. You
+can rest for just one turn by pressing '.' or 's'.
 
 Resting stops if a monster appears or if you are otherwise interrupted.
 
@@ -564,7 +564,7 @@ E. Experience and skills
 
 When you kill monsters, you gain experience points (XP). When you get enough XP,
 you gain an experience level, making your character more powerful. As they gain
-levels, characters gain more hit points, magic points, and spell levels.
+levels, characters gain more health, magic, and spell levels.
 
 Additionally, the experience you gain is used to train your skills. These skills
 represent proficiency with all areas of endeavour an ambitious adventurer might
@@ -710,6 +710,7 @@ adventures, how they are displayed, and what commands there are to use them:
 "        amulets        (use 'P'ut on and 'R'emove)
 \|       staves         (use 'w'ield)
 :        spellbooks     (use 'M'emorise and 'z'ap, 'Q' to quiver)
+%        talismans      (use 'V' to evoke)
 }        miscellaneous  (use 'V' to evoke, 'Q' to quiver)
 $        gold           (use 'g' to pick up)
 =======  =============  ================================================
@@ -851,9 +852,8 @@ shield (especially larger shields) slows your attacks, hampers your ability to
 cast spells, and lowers your evasion. Weaker characters are more affected by
 these penalties, but all characters can reduce and eventually eliminate these
 penalties by mastering the Shields skill. You also obviously cannot wield a
-two-handed weapon while wearing a shield. Shields are most effective against
-the first attack on you each turn, and become less useful for every one after
-that.
+two-handed weapon while wearing a shield. Shields are limited in how many
+attacks they can block each turn; larger shields can block more.
 
 Some magical armours have special powers. These powers are sometimes automatic,
 affecting you whenever you wear the armour, and sometimes must be activated with
@@ -882,7 +882,7 @@ magic) with the 'r' command.
 
 While scrolls tend to affect your equipment or your environment, most potions
 affect your character in some way. The most common type is the simple curing
-potion, which restores some hit points and cures many ailments, but there are
+potion, which restores some health and cures many ailments, but there are
 many other varieties of potions to be found. Potions can be quaffed (drunk) with
 the 'q' command.
 
@@ -942,6 +942,17 @@ experience will have twice the usual effect when used for training that skill.
 Once a certain amount of bonus experience has been gained in this way, you will
 automatically discard the finished manual.
 
+% Talismans
+========================================
+
+Talismans allow their user to shift into a different form. Entering or leaving
+a form with a talisman requires a brief period of concentration, but otherwise,
+forms last until the user chooses to leave them.
+
+More powerful talismans require some amount of Shapeshifting skill, without
+which a user will find their maximum health reduced until they leave the form.
+Shapeshifting skill also increases other benefits provided by talismans' forms,
+though weaker talismans have a limit to how helpful skill can be.
 
 { Miscellaneous
 ========================================
@@ -958,11 +969,24 @@ achievement in any regard.
 Miscellany can often be 'Q'uivered in order to shoot via the autofire or 'f'ire
 interface, like spells and ammo.
 
-$ Gold
+$ Gold and Gems
 ========================================
 
 Gold can be used to buy items should you run across shops. There are also a
 few more esoteric uses for gold.
+
+Gems are extremely rare items found at the end of many dungeon branches. They
+are completely useless within the dungeon, and only a particularly cocky
+adventurer would set out to retrieve even one to the outside world. Zot hoards
+these gems jealously, and will spitefully smash them soon after an adventurer
+enters the branch of the dungeon in which they rest.
+
+Still, a very quick-moving adventurer might seize a gem first and keep its
+precious shards. Zot cannot track gems outside their home branches, so with
+truly astonishing speed, it might even be possible to abscond with one still
+intact... but such a feat is difficult to credit, and likely pointless besides.
+
+Once the Orb of Zot is taken, Zot will be unable to smash any gems.
 
 Artefacts
 ========================================
@@ -998,10 +1022,9 @@ There are many skills related to magic, the principal one being Spellcasting.
 Spellcasting determines the number of Magic Points available; it also helps to
 cast any spell, though less so than schools associated with a spell. Next, there
 are several general magical schools (Conjuration, Hexes, Summoning, Necromancy,
-Translocation and Transmutation) as well as several elemental schools (Fire,
-Ice, Air and Earth) and, finally, Poison. A particular spell can belong to up
-to three schools. Being skilled in a spell's schools improves the casting
-chance and the power of that spell.
+Translocation and Alchemy) as well as several elemental schools (Fire, Ice, Air
+and Earth). A particular spell can belong to up to three schools. Being skilled
+in a spell's schools improves the casting chance and the power of that spell.
 
 Spells are stored in books, which you will occasionally find in the dungeon.
 Once you have picked up a book and added its contents to your spell library, you
@@ -1157,10 +1180,9 @@ mutations as they gain levels; these are listed in cyan. They are permanent and
 can never be removed. If one of your Demonspawn powers has been augmented by a
 random mutation, it is displayed in a lighter colour.
 
-Many a species starts with some special intrinsic features, like the greater
-speed of Felids or Spriggans, or the claws of Trolls and Ghouls. These are
-often, but not always, like a preset mutation. In case such an innate feature
-gets amplified by an ordinary mutation, it is displayed in a light blue colour.
+Many species have special intrinsic features, like Trolls' claws and Felids' fur.
+These can also be viewed on the 'A' screen. If enhanced by a mutation, they will
+be displayed in light blue. (Mutations cannot remove species intrinsics.)
 Some of these innate features will provide an activated ability, which can be
 used with the 'a' command.
 
@@ -1533,7 +1555,7 @@ Hill Orcs (HO)
   convert to Beogh even without an altar whenever an orc priest is in sight.
 
 Minotaurs (Mi)
-  The Minotaurs are a species of hybrids, posessing human bodies with bovine
+  The Minotaurs are a species of hybrids, possessing Human bodies with bovine
   heads. They delve into the Dungeon because of their instinctive love of
   twisting passageways.
 
@@ -1543,7 +1565,7 @@ Minotaurs (Mi)
   dare attack them.
 
 Merfolk (Mf)
-  The Merfolk are a hybrid species of half-human, half-fish that typically live
+  The Merfolk are a hybrid species of half-Human, half-fish that typically live
   in the oceans and rivers, seldom venturing toward land. However, Merfolk
   aren't as limited on land as some myths suggest; their tails will quickly
   reform into legs once they leave the water (and, likewise, their legs will
@@ -1557,22 +1579,10 @@ Merfolk (Mf)
   they can also use longer swords quite well.
 
   As spellcasters, they tend to be quite good in specific areas. Their mystical
-  relationship with water makes it easier for them to use poison and ice magic,
+  relationship with water makes it easier for them to use alchemy and ice magic,
   which use water occasionally as a material component. The legendary water
   magic of the Merfolk was lost in ancient times, but some of that affinity
-  still remains. The instability of their own morphogenic matrix has made them
-  very accomplished transmuters, but most other magic seems foreign to them.
-
-Armataurs (At)
-  The Armataurs are a large, scaled mammalian species, walking on four feet
-  and swinging a powerful tail behind them. Their elephant-back armies
-  terrorize the lands outside the Dungeon.
-
-  Armataurs instinctively roll when moving toward foes, getting a free move.
-  Their long, nimble tongues drink every last drop from potions, doubling
-  their effects, but the strange syllables of magical scrolls slow them down.
-  They have great aptitudes with armour and shields, though their body shape
-  reduces the protection offered by body armour early on.
+  still remains. Most other magic seems foreign to them.
 
 Gargoyles (Gr)
   A cross between ordinary stone gargoyles and living beings, Gargoyles are
@@ -1587,8 +1597,8 @@ Gargoyles (Gr)
   earth-based conjurers.
 
 Draconians (Dr)
-  Draconians are human-dragon hybrids: humanoid in form and approximately
-  human-sized, with wings, tails and scaly skins. Draconians start out in an
+  Draconians are Human-dragon hybrids: humanoid in form and approximately
+  Human-sized, with wings, tails and scaly skins. Draconians start out in an
   immature form with brown scales, but as they grow in power they take on a
   variety of colours. This happens at an early stage in their career, and the
   colour is determined by chromosomes, not by behaviour.
@@ -1615,18 +1625,24 @@ Trolls (Tr)
   wounds. However, they are hopeless at spellcasting and learn most skills very
   slowly. Their large size prevents them from wearing most forms of armour.
 
-Ghouls (Gh)
-  Ghouls are horrible undead creatures that sleep in their graves for years on
-  end, only to rise and stalk the living. Slain foes heal these monstrous
-  beings as they feast on the macabre energies released.
+Deep Elves (DE)
+   The Deep Elves are a species of Elves who long ago fled the overworld to live
+   in darkness underground. There, they developed their mental powers, evolving
+   a natural gift for all forms of magic, and adapted physically to their new
+   environment, becoming weaker and losing all colouration. They are poor at
+   melee combat and physical defence, although they are capable at using bows
+   and other ranged weapons.
 
-  They learn most skills slowly, although they make decent unarmed fighters
-  with their claws. Due to their contact with the grave they can also learn to
-  use ice, earth, poison and necromantic magic without too many difficulties.
+Armataurs (At)
+  The Armataurs are a large, scaled mammalian species, walking on four feet
+  and swinging a powerful tail behind them. Their elephant-back armies
+  terrorize the lands outside the Dungeon.
 
-  Like other undead, ghouls are naturally immune to poisons, negative energy
-  and torment; have little warmth left to be affected by cold; and are not
-  susceptible to mutations.
+  Armataurs instinctively roll when moving toward foes, getting a free move and
+  regenerating magic. They have great aptitudes with armour and shields, though
+  their body shape reduces the protection offered by body armour early on. At
+  higher levels they also regenerate both health and magic when rolling, making
+  them truly resilient.
 
 Gnolls (Gn)
   Gnolls are a species of caniform humanoids originally hailing from the arid
@@ -1655,10 +1671,10 @@ for, and/or add a relatively complex mechanic (or change in mechanic) to
 gameplay.
 
 Humans (Hu)
-  Humans tend to be hardworking and industrious, and learn new things quickly.
-  The Human species is the most versatile of all the species available to
-  players. Humans advance quickly in levels and have equal abilities in most
-  skills.
+  Humans are natural explorers. As they uncover new spaces in the dungeon,
+  they are refreshed and invigorated, rapidly healing and recovering magic.
+  They are also the most versatile of all species - having balanced aptitudes
+  for all skills lets them adapt to use whatever they find.
 
 Kobolds (Ko)
   Kobolds are small, mysterious creatures of unknown origin. They are well
@@ -1668,8 +1684,8 @@ Kobolds (Ko)
   They are competent in combat, especially with short blades, maces or ranged
   weapons, and are comfortable with all forms of magic. They are also very
   adept at using magical devices. Their small size makes them unable to wield
-  large weapons, but they are agile and stealthy, and advance in levels as
-  quickly as Humans.
+  large weapons, but they are agile and stealthy, and advance in levels slightly
+  more quickly than Humans.
 
 Demonspawn (Ds)
   Demonspawn are horrible half-mortal, half-infernal creatures. Demonspawn can
@@ -1697,9 +1713,9 @@ Djinn (Dj)
   through the air without need for legs or feet, they cannot wear boots.
 
   Djinn are middlingly competent at most forms of physical combat, but have
-  a particular aptitude for spellcasting. Their Spellcasting skill grants
-  the same level of spell success and power that other species need multiple
-  skills to reach.
+  a particular aptitude for spellcasting. Their aptitudes for all forms of
+  magic are phenomenal, though their unique relationship with magic means that
+  they cannot choose to train magic skills independently.
 
 Spriggans (Sp)
   Spriggans are small magical creatures distantly related to Elves. They love to
@@ -1713,12 +1729,25 @@ Spriggans (Sp)
   armour. They cannot wield large weapons, and even most smaller weapons require
   both hands to be wielded by a Spriggan.
 
+Ghouls (Gh)
+  Ghouls are horrible undead creatures that sleep in their graves for years on
+  end, only to rise and stalk the living. Slain foes heal these monstrous
+  beings as they feast on the macabre energies released.
+
+  They learn most skills slowly, although they make decent unarmed fighters
+  with their claws. Due to their contact with the grave they can also learn to
+  use ice, earth, and necromantic magic without too many difficulties.
+
+  Like other undead, ghouls are naturally immune to poisons, negative energy
+  and torment; have little warmth left to be affected by cold; and are not
+  susceptible to mutations.
+
 Tengu (Te)
   The Tengu are an ancient and feared species of bird-people with a legendary
   propensity for violence. Basically humanoid with bird-like heads and clawed
-  feet, the Tengu can wear all types of armour except helmets and boots. Despite
-  their lack of wings, powerful Tengu can fly magically, and their movement
-  speed and evasion are increased slightly while flying.
+  feet, the Tengu can wear all types of armour except helmets and boots. Their
+  magical nature helps them evade attacks while in motion, and despite their
+  lack of wings, more experienced Tengu can magically fly.
 
   They are experts at all forms of fighting, including the magical arts of
   combat (conjurations, summonings and, to a lesser extent, necromancy). They
@@ -1726,24 +1755,29 @@ Tengu (Te)
   Tengu do not appreciate any form of servitude, and so are poor at using
   invocations. Their light avian bodies cannot sustain a great deal of injury.
 
-Deep Elves (DE)
-   The Deep Elves are a species of Elves who long ago fled the overworld to live
-   in darkness underground. There, they developed their mental powers, evolving
-   a natural gift for all forms of magic, and adapted physically to their new
-   environment, becoming weaker and losing all colouration. They are poor at
-   melee combat and physical defence, although they are capable at using bows
-   and other ranged weapons.
+Oni (On)
+  Oni are large, rowdy creatures who love a good fight. They are exceptionally
+  strong and robust, and their fondness for drink allows them to heal twice as
+  much from healing potions and even perform free melee swings around themselves
+  while they chug them.
 
-Ogres (Og)
-  Ogres are huge, chunky creatures who are very strong and robust, but are not
-  nimble at all. They possess a raw talent for magic, but are poor at making
-  use of magical devices. Ogres mature almost as quickly as Humans.
+  They are proficient with most melee weapons and forms of magic, but lack the
+  dexterity or inclination to use ranged weapons or magical devices well. They
+  are, however, good at throwing things, in particular large rocks.
 
-  Their preferred methods of avoiding beatings are dodging and the use of
-  shields. Their large size prevents them from wearing most forms of armour.
-  Ogres are proficient at using all types of melee weapons, but all
-  sophisticated forms of missile combat are awkward for them. They are, however,
-  good at throwing things, in particular boulders.
+  Their large size prevents them from wearing most forms of armour, and are poor
+  at dodging, relying on their enormous bulk to survive battles instead.
+
+Barachim (Ba)
+  Barachim are an amphibious humanoid species, spawned at the dawn of time as
+  servants for the gods. Inevitably, they rebelled and fled into the mortal
+  world; but even uncounted years later, the darkness still flees at their
+  approach, remembering those who they once served.
+
+  Barachim's most remarkable trait is their grossly overmuscled legs, which
+  allow them to leap great distances. When not leaping, they are somewhat
+  slow-moving, and the long sight-lines that their heritage creates can be a
+  major disadvantage, but they can master almost any skill.
 
 Advanced Species
 ================
@@ -1810,19 +1844,20 @@ Formicids (Fo)
   of nasty hexes and maledictions.
 
   With the ability to lift ten times their own weight, the Formicids have
-  strength rivaling that of Ogres. This, along with the fact that they have four
+  strength rivaling that of Oni. This, along with the fact that they have four
   arms, allows Formicid warriors to equip both a shield and a two-handed weapon
   at the same time.
 
-  Formicids make good earth and venom mages, but are quite capable at both melee
-  and ranged combat too. They are naturally bad at air magic and conjurations.
+  Formicids make good earth mages and alchemists, but are quite capable at both
+  melee and ranged combat too. They are naturally bad at air magic and
+  conjurations.
 
 Nagas (Na)
   Nagas are a hybrid species: Human from the waist up with a large snake tail
   instead of legs.
 
-  They are reasonably good at most things and advance in experience levels
-  slightly slower than Humans. They are naturally resistant to poisons, can see
+  They are reasonably good at most things and advance in experience levels at
+  the same rate as Humans. They are naturally resistant to poisons, can see
   invisible creatures, and have tough skin, but their tails are relatively slow
   and cannot move them around as quickly as can other creatures' legs (this only
   affects their movement rate; all other actions are at normal speed). Like
@@ -1836,18 +1871,18 @@ Nagas (Na)
 
 Octopodes (Op)
   These land-capable relatives of common octopuses can move about as fast as
-  humans and yet retain the ability to swim underwater, although their dual
+  Humans and yet retain the ability to swim underwater, although their dual
   adaptation is not as good as that of the shapechanging Merfolk.
 
   Octopodes have eight tentacle-shaped legs, and need four of them to move.
   While a tentacle lacks fingers, two tentacles are a rough equivalent of a
-  human's arm where item manipulation is concerned - including wielding
+  Human's arm where item manipulation is concerned - including wielding
   two-handed weapons with four. They can use no armour other than loose hats,
   but can handle shields just fine. Another peculiarity they have is the ability
   to wear eight rings, one on each tentacle.
 
   Their natural camouflage makes them excel at stealth, and they have good
-  knowledge of poisons as well. They are also able to use their tentacles to
+  knowledge of alchemy as well. They are also able to use their tentacles to
   constrict enemies - potentially several at a time!
 
 Felids (Fe)
@@ -1860,31 +1895,11 @@ Felids (Fe)
   serious disadvantage due to their inability to use armour or weapons.
 
   Their agility and stealth are legendary, as is their ability to get to hard to
-  reach places. They move faster than most species, but don't run as fast as
-  Spriggans. Felids advance in levels very slowly. They are skilled with many
+  reach places. Felids advance in levels very slowly. They are skilled with many
   forms of magic, though less so with raw elemental magic.
 
-  Felids gain extra lives as they increase in levels. Upon death, they will be
-  resurrected in a safe place, losing an experience level in the process.
-
-Barachim (Ba)
-  Barachim are an amphibious humanoid species, spawned at the dawn of time as
-  servants for the gods. Inevitably, they rebelled and fled into the mortal
-  world; but even uncounted years later, the darkness still flees at their
-  approach, remembering those who they once served.
-
-  Barachim's most remarkable trait is their grossly overmuscled legs, which
-  allow them to leap great distances. When not leaping, they are somewhat
-  slow-moving, and the long sight-lines that their heritage creates can be a
-  major disadvantage, but they can master almost any skill.
-
-Meteorae (Me)
-  Meteorae are the people of the heavens, fallen to earth. They possess exceptional
-  skills, an uncanny sense for the space around them, and the ability to recover
-  health and magic as they explore the dungeon. However, as creatures clearly not
-  native to the world, they are easy prey for the dark forces that hunt adventurers
-  - they have one-tenth as much time as normal before Zot finds them. (See the
-  section on 'Zot' for more.)
+  Felids start with an extra life, and gain more as they increase in levels.
+  Upon death, they will be resurrected in a safe place.
 
 Mummies (Mu)
   These are undead creatures who travel into the depths in search of revenge,
@@ -1915,7 +1930,7 @@ White Draconians
 
 Green Draconians
   are used to venomous surroundings and breathe clouds of mephitic vapours. They
-  are especially good in the arts of poison and without deficiencies in other
+  are especially good in the arts of alchemy and without deficiencies in other
   magic realms. Later on, they will develop a poisonous stinger.
 
 Yellow Draconians
@@ -1984,33 +1999,12 @@ Monks
 
 Hunters
   The Hunter is a type of fighter who specialises in missile weapons. A Hunter
-  starts with a shortbow, a scroll of immolation, and a set of leathers.
+  starts with a shortbow, a scroll of butterflies, and a set of leathers.
 
 Brigands
   A Brigand is a shady character who is especially good at killing, using
   daggers or darts. They start with a dagger, a robe and cloak, poisoned darts,
   and a few deadly and rare curare darts.
-
-Adventurer backgrounds
-======================
-
-Adventurers have varied and idiosyncratic skills that they have picked up in
-their travels.
-
-Artificers
-  Artificers have built, bought or burgled an assortment of magic wands to
-  help them through the early Dungeon. Wands have a limited number of uses,
-  though, so they'll want to upgrade from their club ASAP.
-
-Wanderers
-  Wanderers are "jacks-of-all-trades, masters of none". They start the game
-  with a random assortment of skills, items, and maybe spells.
-
-Delvers
-  Delvers have, through some mishap, found themselves several floors below the
-  surface of the Dungeon. They're equipped with a wide variety of magical escape
-  tools, and are well advised to use them to travel to earlier dungeon floors as
-  quickly as possible.
 
 Zealot backgrounds
 ==================
@@ -2027,13 +2021,39 @@ Chaos Knights
   The Chaos Knight is a plaything of Xom, subject to the god's constantly
   changing moods. Xom is a very unpredictable (and possibly psychotic) entity
   who rewards or punishes according to whim. They begin with a lightly enchanted
-  leather armour, a simple weapon of their choice, and one of Xom's toys.
+  leather armour, a simple weapon of their choice, and a scroll of butterflies.
 
 Cinder Acolytes
   Cinder Acolytes serve Ignis, the Dying Flame, who grants them incredible
   power over fire... but there is only so much fire left to draw on, and once
   it burns out, acolytes may need to abandon Ignis. They start with a robe,
   a choice of flaming weapons, and the spell Scorch.
+
+Adventurer backgrounds
+======================
+
+Adventurers have varied and idiosyncratic skills that they have picked up in
+their travels.
+
+Artificers
+  Artificers have built, bought or burgled an assortment of magic wands to
+  help them through the early Dungeon. Wands have a limited number of uses,
+  though, so they'll want to upgrade from their club ASAP.
+
+Shapeshifters
+  Shapeshifters use talismans to shift their body into different forms,
+  granting them uncanny power but making them unable to use some items.
+  They enter the dungeon with two talismans and a potion of lignification.
+
+Wanderers
+  Wanderers are "jacks-of-all-trades, masters of none". They start the game
+  with a random assortment of skills, items, and maybe spells.
+
+Delvers
+  Delvers have, through some mishap, found themselves several floors below the
+  surface of the Dungeon. They're equipped with a wide variety of magical escape
+  tools, and are well advised to use them to travel to earlier dungeon floors as
+  quickly as possible.
 
 Warrior-mage backgrounds
 ========================
@@ -2042,18 +2062,12 @@ Warrior mages begin the game with a mix of physical combat and magic skills,
 though usually excel at neither. They start with a library of spells and
 (usually) some way of defending themselves.
 
-Transmuters
-  Transmuters specialise in transmutation magic, and can cause strange changes
-  in themselves and others. They deal damage primarily in unarmed combat, often
-  using transformations to enhance their defensive and offensive capabilities.
-  They also enter the dungeon with a potion of lignification.
-
 Warpers
   Warpers specialise in translocation magic, and are experts in travelling long
   distances and positioning themselves precisely and use this to their advantage
   in melee or missile combat. They start with a scroll of blinking, a selection
-  of translocation spells, some dispersal boomerangs, a simple weapon of their
-  choice, and leather armour.
+  of translocation spells, some dispersal darts, a simple weapon of their choice,
+  and leather armour.
 
 Hexslinger
   Hexslingers use debilitating spells to assist their ranged attacks. They
@@ -2076,7 +2090,7 @@ Mage backgrounds
 
 A mage is not an available character background by itself, but a type of
 background, encompassing Hedge Wizards, Conjurers, Summoners, Necromancers,
-various Elementalists and Venom Mages. Mages are the best at using magic.
+various Elementalists and Alchemists. Mages are the best at using magic.
 Among other things, they start with a robe, a potion of magic, and spells
 which should see them through the first several levels of the Dungeon.
 
@@ -2119,9 +2133,10 @@ Elementalists
   Earth Magic
     offers direct effects, some destructive and some debilitating.
 
-Venom Mages
-  Venom Mages specialise in poison magic, which is extremely useful in the
-  shallower levels of the Dungeon where few creatures are immune to it.
+Alchemist
+  Alchemists start with knowledge of poison-based magic, which is extremely
+  useful in the shallower levels of the Dungeon where few creatures are immune
+  to it.
 
 ****************************************
 3. List of skills
@@ -2135,12 +2150,13 @@ help menu using '?%', and during character choice with '%'.
 Fighting skills
 ========================================
 
-Fighting is the basic skill used in ranged and melee combat, and applies no matter
-which weapon your character is wielding (if any). Fighting is also the skill
-that determines the number of hit points your character gets as they increase in
-levels (note that this is calculated so that you don't get a long run advantage
-by starting out with a high Fighting skill). Unlike the specific weapon skill,
-Fighting does not change the speed with which you make your attacks.
+Fighting is the basic skill used in ranged and melee combat, and applies no
+matter which weapon your character is wielding (if any). Fighting is also the
+skill that determines the amount of health your character gains as they
+increase in levels (note that this is calculated so that you don't get a long
+run advantage by starting out with a high Fighting skill). Unlike the specific
+weapon skill, Fighting does not change the speed with which you make your
+attacks.
 
 Weapon skills affect your ability to fight with specific melee weapons. Weapon
 skills include:
@@ -2203,9 +2219,9 @@ Magic skills
 ========================================
 
 Spellcasting is the basic skill for magic use. It affects your reserves of
-magical energy (Magic) in the same way that Fighting affects your hit points:
-every time you increase the Spellcasting skill you gain some magic points, and
-you gain a spell level every time you reach a skill level divisible by 0.5.
+magical energy (Magic) in the same way that Fighting affects your health: every
+time you increase the Spellcasting skill you gain some magic points, and you
+gain a spell level every time you reach a skill level divisible by 0.5.
 Spellcasting also helps with the power and success rate of your spells, but to
 a lesser extent than the more specialised magical skills.
 
@@ -2379,9 +2395,10 @@ s, Del, . or Numpad 5
 5 or Shift-Numpad 5
   Long resting, until both health and magic points are full.
 
-Resting is the only way to get rid of manticore spikes, but is otherwise
-indistinguishable from any other action; healing, magic point restoration,
-etc, proceed at the same rate, whether you're resting or not.
+Resting is generally indistinguishable from any other action; healing, magic
+point restoration, etc, proceed at the same rate, whether you're resting or not.
+A few specific spells can be 'channeled' via the rest key for ongoing effects,
+as mentioned in their descriptions.
 
 Dungeon interaction
 ----------------------------------------
@@ -2773,6 +2790,10 @@ and explore.
 e
   Set travel exclusion. If an exclusion is already present, change size (from
   single square to full field of vision); after that, remove exclusion.
+
+R#
+  Set an exclusion with an arbitrary radius, where # is a number from 1 to 8.
+  If an exclusion is already present, change its radius to #.
 
 Ctrl-E
   Erase all travel exclusions at once.

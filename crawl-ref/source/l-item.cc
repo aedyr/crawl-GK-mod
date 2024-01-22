@@ -16,6 +16,7 @@
 #include "coord.h"
 #include "describe.h"
 #include "env.h"
+#include "evoke.h" // evoke_damage_string()
 #include "invent.h"
 #include "item-prop.h"
 #include "item-status-flag-type.h"
@@ -146,7 +147,7 @@ static int l_item_do_wield(lua_State *ls)
 }
 
 /*** Wield this item.
- * @treturn boolean successfuly wielded
+ * @treturn boolean successfully wielded
  * @function wield
  */
 IDEFN(wield, do_wield)
@@ -167,7 +168,7 @@ static int l_item_do_wear(lua_State *ls)
 }
 
 /*** Wear this item (as armour).
- * @treturn boolean successfuly worn
+ * @treturn boolean successfully worn
  * @function wear
  */
 IDEFN(wear, do_wear)
@@ -187,7 +188,7 @@ static int l_item_do_puton(lua_State *ls)
 }
 
 /*** Put this item on (as jewellry).
- * @treturn boolean successfuly put on
+ * @treturn boolean successfully put on
  * @function puton
  */
 IDEFN(puton, do_puton)
@@ -626,6 +627,19 @@ IDEF(is_throwable)
     return 1;
 }
 
+/*** Is this an elemental evoker?
+ * @field is_xp_evoker boolean
+ */
+IDEF(is_xp_evoker)
+{
+    if (!item || !item->defined())
+        return 0;
+
+    lua_pushboolean(ls, is_xp_evoker(*item));
+
+    return 1;
+}
+
 /*** Did we drop this?
  * @field dropped boolean
  */
@@ -770,6 +784,30 @@ IDEF(plus)
     return 1;
 }
 
+/*** Is this item enchantable?
+ * @field is_enchantable boolean
+ */
+IDEF(is_enchantable)
+{
+    if (!item || !item->defined())
+        return 0;
+
+    if (is_artefact(*item)
+        || item->base_type != OBJ_WEAPONS && item->base_type != OBJ_ARMOUR)
+    {
+        lua_pushboolean(ls, false);
+    }
+    // We assume unidentified non-artefact items are enchantable.
+    else if (!item_ident(*item, ISFLAG_KNOW_PLUSES))
+        lua_pushboolean(ls, true);
+    else if (item->base_type == OBJ_WEAPONS)
+        lua_pushboolean(ls, is_enchantable_weapon(*item));
+    else
+        lua_pushboolean(ls, is_enchantable_armour(*item));
+
+    return 1;
+}
+
 IDEF(plus2)
 {
     if (!item || !item->defined())
@@ -845,6 +883,51 @@ IDEF(damage)
     else
         lua_pushnil(ls);
 
+    return 1;
+}
+
+static int l_item_do_damage_rating(lua_State *ls)
+{
+    UDATA_ITEM(item);
+
+    if (!item || !item->defined())
+        return 0;
+
+
+    if (is_weapon(*item)
+        || item->base_type == OBJ_MISSILES)
+    {
+        int rating = 0;
+        string rating_desc = damage_rating(item, &rating);
+        lua_pushnumber(ls, rating);
+        lua_pushstring(ls, rating_desc.c_str());
+    }
+    else
+    {
+        lua_pushnil(ls);
+        lua_pushnil(ls);
+    }
+
+    return 2;
+}
+
+/*** Item damage rating.
+ * @treturn number The item's damage rating.
+ * @treturn string The item's full damage rating string.
+ * @function damage_rating
+ */
+IDEFN(damage_rating, do_damage_rating)
+
+/*** Item evoke damage.
+ * @field evoke_damage string The evokable item's damage string.
+ */
+IDEF(evoke_damage)
+{
+    if (!item || !item->defined())
+        return 0;
+
+    const string damage_str = evoke_damage_string(*item);
+    lua_pushstring(ls, damage_str.c_str());
     return 1;
 }
 
@@ -1329,7 +1412,7 @@ static int l_item_pickup(lua_State *ls)
 /*** Get the Item in a given equipment slot.
  * Takes either a slot name or a slot number.
  * @tparam string|int where
- * @treturn Item|nil returns nil for nothing equiped or invalid slot
+ * @treturn Item|nil returns nil for nothing equipped or invalid slot
  * @function equipped_at
  */
 static int l_item_equipped_at(lua_State *ls)
@@ -1510,10 +1593,22 @@ static int l_item_shopping_list(lua_State *ls)
  */
 static int l_item_acquirement_items(lua_State *ls)
 {
-    if (!you.props.exists(ACQUIRE_ITEMS_KEY))
+
+    const int acquire_type = luaL_safe_checkint(ls, 1);
+    string acquire_key;
+    if (acquire_type <= 1)
+        acquire_key = ACQUIRE_ITEMS_KEY;
+    else if (acquire_type == 2)
+        acquire_key = OKAWARU_WEAPONS_KEY;
+    else if (acquire_type == 3)
+        acquire_key = OKAWARU_ARMOUR_KEY;
+    else
         return 0;
 
-    auto &acq_items = you.props[ACQUIRE_ITEMS_KEY].get_vector();
+    if (!you.props.exists(acquire_key))
+        return 0;
+
+    auto &acq_items = you.props[acquire_key].get_vector();
 
     lua_newtable(ls);
 
@@ -1595,6 +1690,34 @@ LUAFN(l_item_for_set)
     return 1;
 }
 
+static bool _item_pickable(object_class_type base, int sub)
+{
+    if (base == OBJ_MISCELLANY
+        && you.generated_misc.count((misc_item_type)sub))
+    {
+        return false;
+    }
+    return !item_excluded_from_set(base, sub);
+}
+
+LUAFN(l_item_pickable)
+{
+    ASSERT_DLUA;
+
+    const string &specifier = luaL_checkstring(ls, 1);
+    item_list il;
+    item_spec parsed_spec;
+    if (!il.parse_single_spec(parsed_spec, specifier))
+    {
+        luaL_error(ls, make_stringf("Invalid item spec '%s'.",
+                                    specifier.c_str()).c_str());
+        return 0;
+    }
+    lua_pushboolean(ls, _item_pickable(parsed_spec.base_type,
+                                       parsed_spec.sub_type));
+    return 1;
+}
+
 
 struct ItemAccessor
 {
@@ -1608,7 +1731,8 @@ static ItemAccessor item_attrs[] =
     { "branded",           l_item_branded },
     { "god_gift",          l_item_god_gift },
     { "fully_identified",  l_item_fully_identified },
-    { PLUS_KEY,              l_item_plus },
+    { PLUS_KEY,            l_item_plus },
+    { "is_enchantable",    l_item_is_enchantable },
     { "plus2",             l_item_plus2 },
     { "class",             l_item_class },
     { "subtype",           l_item_subtype },
@@ -1632,6 +1756,7 @@ static ItemAccessor item_attrs[] =
     { "reach_range",       l_item_reach_range },
     { "is_ranged",         l_item_is_ranged },
     { "is_throwable",      l_item_is_throwable },
+    { "is_xp_evoker",      l_item_is_xp_evoker },
     { "dropped",           l_item_dropped },
     { "is_melded",         l_item_is_melded },
     { "is_corpse",         l_item_is_corpse },
@@ -1639,6 +1764,8 @@ static ItemAccessor item_attrs[] =
     { "spells",            l_item_spells },
     { "artprops",          l_item_artprops },
     { "damage",            l_item_damage },
+    { "damage_rating",     l_item_damage_rating },
+    { "evoke_damage",      l_item_evoke_damage },
     { "accuracy",          l_item_accuracy },
     { "delay",             l_item_delay },
     { "ac",                l_item_ac },
@@ -1697,6 +1824,7 @@ static const struct luaL_reg item_lib[] =
 
     { "excluded_from_set", l_item_excluded_from_set },
     { "item_for_set",      l_item_for_set },
+    { "pickable",          l_item_pickable },
     { nullptr, nullptr },
 };
 

@@ -108,9 +108,9 @@ a shaft trap. It takes some time to dig the shaft.
 %%%%
 Evoke Blink ability
 
-Randomly translocates the user a short distance. Translocating in this way
-destabilises the user temporarily, preventing consecutive blinks for a
-short period of time depending on Evocations skill.
+Randomly translocates the user a short distance. After translocating in this
+way, the ability cannot be activated again for a short period of time depending
+on Evocations skill.
 %%%%
 Evoke Berserk Rage ability
 
@@ -129,6 +129,11 @@ Creates a mighty thundercloud surrounding the user.
 End Transformation ability
 
 Reverts you to your normal form.
+%%%%
+Begin Untransformation ability
+
+Begins to transform you back into your native form. A short period of
+concentration is required.
 %%%%
 # Zin
 Recite ability
@@ -213,9 +218,9 @@ and either gift may only be received once.
 Receive Forbidden Knowledge ability
 
 Grants you knowledge of the most powerful and sinister Necromancy spells:
-Haunt, Borgnjor's Revivification, Infestation, Necromutation, and Death's Door.
-You must choose between this gift or that of branding a weapon with pain, and
-either gift may only be received once.
+Haunt, Borgnjor's Revivification, Infestation, and Death's Door. You must choose
+between this gift or that of branding a weapon with pain, and either gift may
+only be received once.
 %%%%
 # Yredelemnul
 Recall Undead Harvest ability
@@ -263,6 +268,16 @@ Duel ability
 Enters you into single combat with a worthy foe. On success, you and the
 challenged foe will be transported to Okawaru's Arena to fight to the death,
 with no escape until you either emerge victorious or are slain.
+%%%%
+Receive Weapon ability
+
+Acquires a weapon from a choice of four. This blessing may only be redeemed
+once.
+%%%%
+Receive Armour ability
+
+Acquires a piece of armour from a choice of four. This blessing may only be
+redeemed once.
 %%%%
 # Makhleb
 Minor Destruction ability
@@ -587,11 +602,11 @@ Sacrifices purity of body or mind, causing a single mutation.
 %%%%
 Sacrifice Words ability
 
-Sacrifices the ability to use magical scrolls after being badly injured.
+Sacrifices the ability to use magical scrolls after being injured.
 %%%%
 Sacrifice Drink ability
 
-Sacrifices the ability to drink potions after being badly injured.
+Sacrifices the ability to drink potions after being injured.
 %%%%
 Sacrifice Essence ability
 
@@ -606,10 +621,19 @@ Sacrifice Stealth ability
 Sacrifices stealth, causing you to always be noticed by foes and preventing
 you from having any ranks in the Stealth skill.
 %%%%
+Sacrifice Forms ability
+
+Sacrifices forms, preventing you from voluntarily changing your form and from
+having any ranks in the Shapeshifting skill.
+%%%%
 Sacrifice Artifice ability
 
 Sacrifices the ability to evoke any magical items, and prevents you from having
 any ranks in the Evocations skill.
+
+This includes wands and other items which use Evocations skill - that is, it does
+*not* affect reaching weapons, talismans, and ziggurat figurines. This also renders
+magical staves much less effective in melee.
 %%%%
 Sacrifice Love ability
 
@@ -806,6 +830,12 @@ Turns the user into living lightning and zaps them at the chosen monster,
 dealing electric damage to everything in their path and depositing the user
 at the bolt's end. After using this ability, you will be unable to use it
 again for a short time.
+%%%%
+Siphon Essence ability
+
+Torment nearby living foes, halving their health. The pain inflicted heals
+the user to an extent determined by Shapeshifting skill. After using this
+ability, you will be unable to use it again for a short time.
 %%%%
 Evoke the Sceptre of Asmodeus ability
 

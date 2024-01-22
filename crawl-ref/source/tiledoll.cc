@@ -287,6 +287,20 @@ void fill_doll_equipment(dolls_data &result)
         result.parts[TILEP_PART_LEG]     = 0;
         result.parts[TILEP_PART_SHADOW]  = 0;
         break;
+    case transformation::beast:
+        switch (you.species)
+        {
+        case SP_ARMATAUR:
+        case SP_NAGA:
+        case SP_FELID:
+        case SP_OCTOPODE:
+        case SP_DJINNI:  break;
+        default:
+            result.parts[TILEP_PART_BASE] = TILEP_TRAN_BEAST;
+            result.parts[TILEP_PART_LEG]     = 0;
+            break;
+        }
+        break;
     case transformation::statue:
         tileidx_t ch;
         switch (you.species)
@@ -324,7 +338,7 @@ void fill_doll_equipment(dolls_data &result)
         result.parts[TILEP_PART_CLOAK]   = 0;
         result.parts[TILEP_PART_SHADOW]  = 0;
         break;
-    case transformation::lich:
+    case transformation::death:
         switch (you.species)
         {
 #if TAG_MAJOR_VERSION == 34
@@ -376,12 +390,20 @@ void fill_doll_equipment(dolls_data &result)
         const int item = you.melded[EQ_WEAPON] ? -1 : you.equip[EQ_WEAPON];
         if (you.form == transformation::blade_hands)
         {
-            if (is_player_tile(result.parts[TILEP_PART_BASE], TILEP_BASE_OCTOPODE))
+            const bool natasha = Options.tile_use_monster == MONS_NATASHA;
+            const auto base_tile = result.parts[TILEP_PART_BASE];
+            if (natasha
+                || is_player_tile(base_tile, TILEP_BASE_FELID)
+                || is_player_tile(base_tile, TILEP_BASE_FELID_SILLY))
+            {
+                // TODO: add variant blade hands for alt felid tiles
+                if (natasha || base_tile == TILEP_BASE_FELID)
+                    result.parts[TILEP_PART_HAND1] = TILEP_HAND1_BLADEHAND_FE;
+            }
+            else if (is_player_tile(base_tile, TILEP_BASE_OCTOPODE))
                 result.parts[TILEP_PART_HAND1] = TILEP_HAND1_BLADEHAND_OP;
-            else if (is_player_tile(result.parts[TILEP_PART_BASE], TILEP_BASE_FELID)
-                     || Options.tile_use_monster == MONS_NATASHA)
-                result.parts[TILEP_PART_HAND1] = TILEP_HAND1_BLADEHAND_FE;
-            else result.parts[TILEP_PART_HAND1] = TILEP_HAND1_BLADEHAND;
+            else
+                result.parts[TILEP_PART_HAND1] = TILEP_HAND1_BLADEHAND;
         }
         else if (item == -1)
             result.parts[TILEP_PART_HAND1] = 0;
@@ -410,10 +432,20 @@ void fill_doll_equipment(dolls_data &result)
     if (result.parts[TILEP_PART_BODY] == TILEP_SHOW_EQUIP)
     {
         const int item = you.melded[EQ_BODY_ARMOUR] ? -1 : you.equip[EQ_BODY_ARMOUR];
-        if (item == -1)
-            result.parts[TILEP_PART_BODY] = 0;
-        else
+        if (item != -1)
             result.parts[TILEP_PART_BODY] = tilep_equ_armour(you.inv[item]);
+        else if (you.form == transformation::maw
+                 // non-body-armour wearing species would need this tile to go elswhere
+                 // except for draconians
+                 && (!species::bans_eq(you.species, EQ_BODY_ARMOUR)
+                    || species::is_draconian(you.species)))
+        {
+            const auto maw = TILEP_BODY_MAW_FORM;
+            const int count = tile_player_count(maw);
+            result.parts[TILEP_PART_BODY] = maw + you.frame_no % count;
+        }
+        else
+            result.parts[TILEP_PART_BODY] = 0;
     }
     // Cloak.
     if (result.parts[TILEP_PART_CLOAK] == TILEP_SHOW_EQUIP)
@@ -442,9 +474,15 @@ void fill_doll_equipment(dolls_data &result)
                         + result.parts[TILEP_PART_BASE] - TILEP_BASE_FELID;
                 }
                 else if (is_player_tile(result.parts[TILEP_PART_BASE],
+                                        TILEP_BASE_FELID_SILLY))
+                {
+                    result.parts[TILEP_PART_HELM] = TILEP_HELM_HORNS_CAT_SILLY
+                        + result.parts[TILEP_PART_BASE] - TILEP_BASE_FELID_SILLY;
+                }
+                else if (is_player_tile(result.parts[TILEP_PART_BASE],
                                   TILEP_TRAN_STATUE_FELID))
                 {
-                    result.parts[TILEP_PART_HELM] = TILEP_HELM_HORNS_CAT;
+                    result.parts[TILEP_PART_HELM] = TILEP_HELM_HORNS_CAT_STATUE;
                 }
             }
             else if (species::is_draconian(you.species))
@@ -504,7 +542,7 @@ void fill_doll_equipment(dolls_data &result)
     if (result.parts[TILEP_PART_ENCH] == TILEP_SHOW_EQUIP)
     {
         result.parts[TILEP_PART_ENCH] =
-            (you.duration[DUR_LIQUID_FLAMES] ? TILEP_ENCH_STICKY_FLAME : 0);
+            (you.duration[DUR_STICKY_FLAME] ? TILEP_ENCH_STICKY_FLAME : 0);
     }
     // Draconian head/wings.
     if (species::is_draconian(you.species))
@@ -568,6 +606,16 @@ void save_doll_file(writer &dollf)
     dollf.write(fbuf, strlen(fbuf));
 }
 
+void reveal_bardings(tileidx_t *parts, int (&flags)[TILEP_PART_MAX])
+{
+    const tileidx_t base = parts[TILEP_PART_BASE];
+    if (is_player_tile(base, TILEP_BASE_NAGA)
+        || is_player_tile(base, TILEP_BASE_ARMATAUR))
+    {
+        flags[TILEP_PART_BOOTS] = TILEP_FLAG_NORMAL;
+    }
+}
+
 #ifdef USE_TILE_LOCAL
 void pack_doll_buf(SubmergedTileBuffer& buf, const dolls_data &doll,
                    int x, int y, bool submerged, bool ghost)
@@ -615,26 +663,7 @@ void pack_doll_buf(SubmergedTileBuffer& buf, const dolls_data &doll,
         p_order[9] = TILEP_PART_CLOAK;
     }
 
-    // Special case bardings from being cut off.
-    const bool is_naga = is_player_tile(doll.parts[TILEP_PART_BASE],
-                                        TILEP_BASE_NAGA);
-
-    if (doll.parts[TILEP_PART_BOOTS] >= TILEP_BOOTS_NAGA_BARDING
-        && doll.parts[TILEP_PART_BOOTS] <= TILEP_BOOTS_NAGA_BARDING_RED
-        || doll.parts[TILEP_PART_BOOTS] == TILEP_BOOTS_LIGHTNING_SCALES)
-    {
-        flags[TILEP_PART_BOOTS] = is_naga ? TILEP_FLAG_NORMAL : TILEP_FLAG_HIDE;
-    }
-
-    const bool is_ptng = is_player_tile(doll.parts[TILEP_PART_BASE],
-                                        TILEP_BASE_ARMATAUR);
-
-    if (doll.parts[TILEP_PART_BOOTS] >= TILEP_BOOTS_CENTAUR_BARDING
-        && doll.parts[TILEP_PART_BOOTS] <= TILEP_BOOTS_CENTAUR_BARDING_RED
-        || doll.parts[TILEP_PART_BOOTS] == TILEP_BOOTS_BLACK_KNIGHT)
-    {
-        flags[TILEP_PART_BOOTS] = is_ptng ? TILEP_FLAG_NORMAL : TILEP_FLAG_HIDE;
-    }
+    reveal_bardings(doll.parts, flags);
 
     // Set up mcache data based on equipment. We don't need this lookup if both
     // pairs of offsets are defined in Options.
@@ -644,7 +673,7 @@ void pack_doll_buf(SubmergedTileBuffer& buf, const dolls_data &doll,
     if (Options.tile_use_monster != MONS_0)
     {
         monster_info minfo(MONS_PLAYER, MONS_PLAYER);
-        minfo.props[MONSTER_TILE_KEY] = short(doll.parts[TILEP_PART_BASE]);
+        minfo.props[MONSTER_TILE_KEY] = int(doll.parts[TILEP_PART_BASE]);
         item_def *item;
         if (you.slot_item(EQ_WEAPON))
         {
@@ -679,13 +708,6 @@ void pack_doll_buf(SubmergedTileBuffer& buf, const dolls_data &doll,
         if (p == TILEP_PART_SHADOW && (submerged || ghost))
             continue;
 
-        int ymax = TILE_Y;
-
-        if (flags[p] == TILEP_FLAG_CUT_CENTAUR
-            || flags[p] == TILEP_FLAG_CUT_NAGA)
-        {
-            ymax = 18;
-        }
         int ofs_x = 0, ofs_y = 0;
         if ((p == TILEP_PART_HAND1 && you.slot_item(EQ_WEAPON)
              || p == TILEP_PART_HAND2 && you.slot_item(EQ_SHIELD))
@@ -695,6 +717,7 @@ void pack_doll_buf(SubmergedTileBuffer& buf, const dolls_data &doll,
             ofs_y = dinfo[draw_info_count - dind - 1].ofs_y;
             ++dind;
         }
+        const int ymax = flags[p] == TILEP_FLAG_CUT_BOTTOM ? 18 : TILE_Y;
         buf.add(doll.parts[p], x, y, i, submerged, ghost, ofs_x, ofs_y, ymax);
     }
 }

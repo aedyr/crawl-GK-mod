@@ -96,6 +96,7 @@ static void _player_moveto(const coord_def &c, bool real_movement, bool clear_ne
 
     // clear invalid constrictions even with fake movement
     you.clear_invalid_constrictions();
+    you.clear_far_engulf();
 }
 
 player_vanishes::player_vanishes(bool _movement)
@@ -139,6 +140,11 @@ void player::apply_location_effects(const coord_def &oldpos,
                                     int /*killernum*/)
 {
     moveto_location_effects(env.grid(oldpos));
+}
+
+void player::did_deliberate_movement()
+{
+    player_did_deliberate_movement();
 }
 
 void player::set_position(const coord_def &c)
@@ -237,7 +243,7 @@ int player::damage_type(int)
     if (const item_def* wp = weapon())
         return get_vorpal_type(*wp);
     else if (form == transformation::blade_hands)
-        return DVORP_SLICING;
+        return DAMV_PIERCING;
     else if (has_usable_claws())
         return DVORP_CLAWING;
     else if (has_usable_tentacles())
@@ -373,7 +379,7 @@ random_var player::attack_delay_with(const item_def *projectile, bool rescale,
     // We could simplify some code elsewhere if we fixed this,
     // e.g. cast_manifold_assault().
     return rv::max(div_rand_round(attk_delay * you.time_taken, BASELINE_DELAY),
-                   random_var(2));
+                   random_var(1));
 }
 
 // Returns the item in the given equipment slot, nullptr if the slot is empty.
@@ -696,7 +702,7 @@ string player::arm_name(bool plural, bool *can_plural) const
     string str = species::arm_name(species);
 
     string adj;
-    if (form == transformation::lich)
+    if (form == transformation::death)
         adj = "bony";
     else if (form == transformation::shadow)
         adj = "shadowy";
@@ -819,13 +825,11 @@ bool player::go_berserk(bool intentional, bool potion)
 
     mpr("You feel mighty!");
 
-    int dur = 20 + random2avg(19,2);
-    if (!you.has_mutation(MUT_LONG_TONGUE))
-        dur /= 2;
+    int dur = (20 + random2avg(19,2)) / 2;
     you.increase_duration(DUR_BERSERK, dur);
 
     // Apply Berserk's +50% Current/Max HP.
-    calc_hp(true, false);
+    calc_hp(true);
 
     you.berserk_penalty = 0;
 
@@ -893,8 +897,7 @@ bool player::antimagic_susceptible() const
 
 bool player::is_web_immune() const
 {
-    return form == transformation::spider
-        || is_insubstantial()
+    return is_insubstantial()
         || player_equip_unrand(UNRAND_SLICK_SLIPPERS);
 }
 
@@ -925,12 +928,12 @@ int player::constriction_damage(constrict_type typ) const
     switch (typ)
     {
     case CONSTRICT_BVC:
-        return roll_dice(2, div_rand_round(70 +
-                   you.props[VILE_CLUTCH_POWER_KEY].get_int(), 20));
+        return roll_dice(2, div_rand_round(40 +
+                   you.props[VILE_CLUTCH_POWER_KEY].get_int(), 25));
     case CONSTRICT_ROOTS:
         // Assume we're using the wand.
-        // Min power 2d4, max power ~2d14 (also ramps over time)
-        return roll_dice(2, div_rand_round(25 +
+        // Min power 2d3, max power ~2d14 (also ramps over time)
+        return roll_dice(2, div_rand_round(20 +
                     you.props[FASTROOT_POWER_KEY].get_int(), 10));
     default:
         return roll_dice(2, div_rand_round(strength(), 5));

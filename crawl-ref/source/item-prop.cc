@@ -15,7 +15,9 @@
 
 #include "artefact.h"
 #include "art-enum.h"
+#include "branch.h" // gem_time_limit
 #include "describe.h"
+#include "english.h" // number_in_words
 #include "evoke.h"
 #include "god-passive.h"
 #include "invent.h"
@@ -125,11 +127,10 @@ static const armour_def Armour_prop[] =
     { ARM_ROBE,                 "robe",                   2,   0,     7,
         EQ_BODY_ARMOUR, SIZE_LITTLE, SIZE_LARGE, true, 1000, {
             { SPARM_RESISTANCE,      1 },
-            { SPARM_ARCHMAGI,        1 },
-            { SPARM_NORMAL,          2 },
             { SPARM_COLD_RESISTANCE, 2 },
             { SPARM_FIRE_RESISTANCE, 2 },
             { SPARM_POSITIVE_ENERGY, 2 },
+            { SPARM_NORMAL,          3 },
             { SPARM_WILLPOWER,       4 },
     }},
     { ARM_LEATHER_ARMOUR,       "leather armour",         3,  -40,   20,
@@ -150,7 +151,7 @@ static const armour_def Armour_prop[] =
        EQ_BODY_ARMOUR, SIZE_LITTLE, SIZE_GIANT, false, 0, {},
        ARMF_REGENERATION, },
 #endif
-    { ARM_TROLL_LEATHER_ARMOUR, "troll leather armour",  4,  -40,    150,
+    { ARM_TROLL_LEATHER_ARMOUR, "troll leather armour",  3,  -40,    150,
        EQ_BODY_ARMOUR, SIZE_LITTLE, SIZE_GIANT, false, 50, {},
        ARMF_REGENERATION },
 
@@ -390,11 +391,11 @@ static const vector<brand_weight_tuple> DEMON_BRANDS = {
 static const vector<brand_weight_tuple> LBL_BRANDS = {
     { SPWPN_HOLY_WRATH,     23 },
     { SPWPN_NORMAL,         19 },
-    { SPWPN_HEAVY,          15 },
-    { SPWPN_ELECTROCUTION,  10 },
-    { SPWPN_PROTECTION,      8 },
-    { SPWPN_FREEZING,        5 },
-    { SPWPN_FLAMING,         5 },
+    { SPWPN_ELECTROCUTION,  12 },
+    { SPWPN_PROTECTION,     10 },
+    { SPWPN_FREEZING,        8 },
+    { SPWPN_FLAMING,         8 },
+    { SPWPN_HEAVY,           5 },
     { SPWPN_DRAINING,        5 },
     { SPWPN_VAMPIRISM,       4 },
     { SPWPN_VENOM,           2 },
@@ -558,7 +559,7 @@ static const weapon_def Weapon_prop[] =
             { SPWPN_DISTORTION,      1 },
             { SPWPN_ANTIMAGIC,       1 },
         }},
-    { WPN_QUICK_BLADE,       "quick blade",         4,  6,  7,
+    { WPN_QUICK_BLADE,       "quick blade",         4,  6, 12,
         SK_SHORT_BLADES, SIZE_LITTLE, SIZE_LITTLE, MI_NONE,
         DAMV_PIERCING, 0, 2, 150, {
             { SPWPN_NORMAL,         43 },
@@ -729,22 +730,35 @@ static const weapon_def Weapon_prop[] =
     { WPN_SLING,             "sling",               7,  0, 14,
         SK_RANGED_WEAPONS,   SIZE_LITTLE, SIZE_LITTLE, MI_SLING_BULLET,
         DAMV_NON_MELEE, 8, 10, 15, RANGED_BRANDS },
-    { WPN_HAND_CROSSBOW,     "hand crossbow",      15,  3, 19,
+    { WPN_HAND_CANNON,       "hand cannon",      16,  3, 19,
         SK_RANGED_WEAPONS,   SIZE_LITTLE, SIZE_LITTLE, MI_BOLT,
-        DAMV_NON_MELEE, 0, 10, 35, RANGED_BRANDS },
+        DAMV_NON_MELEE, 0, 10, 35, {
+            // Hand cannons appear late, so encourage use by reducing
+            // SPWPN_NORMAL weight relative to other ranged weapons.
+            { SPWPN_NORMAL,        15 },
+            { SPWPN_FLAMING,       11 },
+            { SPWPN_FREEZING,      11 },
+            { SPWPN_HEAVY,         7 },
+            { SPWPN_DRAINING,      7 },
+            { SPWPN_ELECTROCUTION, 4 },
+            { SPWPN_ANTIMAGIC,     2 },
+        } },
 #if TAG_MAJOR_VERSION == 34
     { WPN_FUSTIBALUS,        "fustibalus",         10, -2, 16,
         SK_RANGED_WEAPONS,   SIZE_LITTLE, SIZE_SMALL, MI_SLING_BULLET,
         DAMV_NON_MELEE, 0, 0, 150, RANGED_BRANDS },
 #endif
 
-    { WPN_SHORTBOW,          "shortbow",            9,  2, 15,
+    { WPN_SHORTBOW,          "shortbow",            8,  2, 14,
         SK_RANGED_WEAPONS,   SIZE_LITTLE, NUM_SIZE_LEVELS, MI_ARROW,
         DAMV_NON_MELEE, 8, 10, 30, RANGED_BRANDS },
+    { WPN_ORCBOW,            "orcbow",             11, -3, 15,
+        SK_RANGED_WEAPONS,   SIZE_LITTLE, NUM_SIZE_LEVELS, MI_ARROW,
+        DAMV_NON_MELEE, 8, 10, 35, RANGED_BRANDS },
     { WPN_ARBALEST,          "arbalest",           16, -2, 19,
         SK_RANGED_WEAPONS,   SIZE_LITTLE, NUM_SIZE_LEVELS, MI_BOLT,
         DAMV_NON_MELEE, 5, 10, 45, RANGED_BRANDS },
-    { WPN_LONGBOW,           "longbow",            13,  0, 16,
+    { WPN_LONGBOW,           "longbow",            14,  0, 17,
         SK_RANGED_WEAPONS,   SIZE_MEDIUM, NUM_SIZE_LEVELS, MI_ARROW,
         DAMV_NON_MELEE, 2, 10, 65, RANGED_BRANDS },
     { WPN_TRIPLE_CROSSBOW,   "triple crossbow",    23, -2, 23,
@@ -818,6 +832,36 @@ static const food_def Food_prop[] =
 };
 #endif
 
+struct gem_def
+{
+    gem_type    id;
+    const char *adj;
+    branch_type branch;
+    int         time_per_floor;
+};
+static int Gem_index[NUM_GEM_TYPES];
+static const gem_def Gem_prop[] =
+{
+    { GEM_DUNGEON, "smoky",       BRANCH_DUNGEON, 6000 },
+#if TAG_MAJOR_VERSION == 34
+    { GEM_ORC,     "glittering",  BRANCH_ORC,     6000 },
+#endif
+    { GEM_ELF,     "shimmering",  BRANCH_ELF,     6000 },
+    { GEM_LAIR,    "earthy",      BRANCH_LAIR,    7500 }, // travel time
+
+    { GEM_SWAMP,   "mossy",       BRANCH_SWAMP,   4500 }, // small layouts
+    { GEM_SHOALS,  "azure",       BRANCH_SHOALS,  4500 }, // seems faster
+    { GEM_SNAKE,   "jade",        BRANCH_SNAKE,   6000 },
+    { GEM_SPIDER,  "milky-white", BRANCH_SPIDER,  6000 },
+
+    { GEM_SLIME,   "starry",      BRANCH_SLIME,   1200 }, // usually dived fast
+    { GEM_VAULTS,  "shining",     BRANCH_VAULTS,  7500 }, // big, travel time
+    { GEM_CRYPT,   "ivory",       BRANCH_CRYPT,   6000 },
+    { GEM_TOMB,    "sanguine",    BRANCH_TOMB,    6000 },
+    { GEM_DEPTHS,  "midnight",    BRANCH_DEPTHS,  7500 }, // big, travel time
+    { GEM_ZOT,     "prismatic",   BRANCH_ZOT,     2000 }, // often dived
+};
+
 struct item_set_def
 {
     string name;
@@ -832,6 +876,8 @@ static const item_set_def item_sets[] =
     { "ally scroll",        OBJ_SCROLLS,    { SCR_SUMMONING, SCR_BUTTERFLIES } },
     { "area misc",          OBJ_MISCELLANY, { MISC_CONDENSER_VANE,
                                               MISC_TIN_OF_TREMORSTONES } },
+    { "ally misc",          OBJ_MISCELLANY, { MISC_BOX_OF_BEASTS,
+                                              MISC_SACK_OF_SPIDERS } },
 };
 COMPILE_CHECK(ARRAYSZ(item_sets) == NUM_ITEM_SET_TYPES);
 
@@ -841,11 +887,12 @@ void init_properties()
 {
     // The compiler would complain about too many initializers but not
     // about too few, so we check this ourselves.
-    COMPILE_CHECK(NUM_ARMOURS  == ARRAYSZ(Armour_prop));
-    COMPILE_CHECK(NUM_WEAPONS  == ARRAYSZ(Weapon_prop));
-    COMPILE_CHECK(NUM_MISSILES == ARRAYSZ(Missile_prop));
+    COMPILE_CHECK(NUM_ARMOURS   == ARRAYSZ(Armour_prop));
+    COMPILE_CHECK(NUM_WEAPONS   == ARRAYSZ(Weapon_prop));
+    COMPILE_CHECK(NUM_MISSILES  == ARRAYSZ(Missile_prop));
+    COMPILE_CHECK(NUM_GEM_TYPES == ARRAYSZ(Gem_prop));
 #if TAG_MAJOR_VERSION == 34
-    COMPILE_CHECK(NUM_FOODS    == ARRAYSZ(Food_prop));
+    COMPILE_CHECK(NUM_FOODS     == ARRAYSZ(Food_prop));
 #endif
 
     for (int i = 0; i < NUM_ARMOURS; i++)
@@ -856,6 +903,9 @@ void init_properties()
 
     for (int i = 0; i < NUM_MISSILES; i++)
         Missile_index[ Missile_prop[i].id ] = i;
+
+    for (int i = 0; i < NUM_GEM_TYPES; i++)
+        Gem_index[ Gem_prop[i].id ] = i;
 
 #if TAG_MAJOR_VERSION == 34
     for (int i = 0; i < NUM_FOODS; i++)
@@ -904,10 +954,14 @@ const set<pair<object_class_type, int> > removed_items =
     { OBJ_BOOKS,     BOOK_BUGGY_DESTRUCTION },
     { OBJ_BOOKS,     BOOK_ENVENOMATIONS },
     { OBJ_BOOKS,     BOOK_AKASHIC_RECORD },
-    { OBJ_BOOKS,     BOOK_BATTLE },
     { OBJ_BOOKS,     BOOK_STONE },
     { OBJ_BOOKS,     BOOK_PAIN },
     { OBJ_BOOKS,     BOOK_MALEDICT },
+    { OBJ_BOOKS,     BOOK_SKY },
+    { OBJ_BOOKS,     BOOK_RIME },
+    { OBJ_BOOKS,     BOOK_TRANSFIGURATIONS },
+    { OBJ_BOOKS,     BOOK_OZOCUBU },
+    { OBJ_BOOKS,     BOOK_NEARBY },
     { OBJ_RODS,      ROD_VENOM },
     { OBJ_RODS,      ROD_WARDING },
     { OBJ_RODS,      ROD_DESTRUCTION },
@@ -950,6 +1004,7 @@ const set<pair<object_class_type, int> > removed_items =
     { OBJ_MISSILES,  MI_ARROW },
     { OBJ_MISSILES,  MI_BOLT },
     { OBJ_MISSILES,  MI_SLING_BULLET },
+    { OBJ_GEMS,      GEM_ORC },
 #endif
     { OBJ_JEWELLERY, AMU_NOTHING }, // These should only spawn as uniques
 };
@@ -1126,8 +1181,10 @@ static iflags_t _full_ident_mask(const item_def& item)
     case OBJ_MISSILES:
     case OBJ_ORBS:
     case OBJ_RUNES:
+    case OBJ_GEMS:
     case OBJ_GOLD:
     case OBJ_BOOKS:
+    case OBJ_MISCELLANY:
 #if TAG_MAJOR_VERSION == 34
     case OBJ_FOOD:
     case OBJ_RODS:
@@ -1141,11 +1198,9 @@ static iflags_t _full_ident_mask(const item_def& item)
     case OBJ_JEWELLERY:
         flagset = ISFLAG_KNOW_TYPE;
         break;
-    case OBJ_MISCELLANY:
-        flagset = 0;
-        break;
     case OBJ_WEAPONS:
     case OBJ_ARMOUR:
+    case OBJ_TALISMANS:
         // All flags necessary for full identification.
     default:
         break;
@@ -1594,7 +1649,7 @@ int wand_charge_value(int type, int item_level)
 /**
  * Is the given item a wand which is empty? Wands are normally destroyed when
  * their charges are exhausted, but empty wands can still happen through
- * transfered games.
+ * transferred games.
  *
  * @param item  The item in question.
  * @return      Whether the wand is empty.
@@ -1657,6 +1712,14 @@ bool is_enchantable_armour(const item_def &arm, bool unknown)
         return false;
 
     return true;
+}
+
+bool is_enchantable_weapon(const item_def &weapon, bool unknown)
+{
+    return weapon.base_type == OBJ_WEAPONS
+       && !is_artefact(weapon)
+       && (unknown && !item_ident(weapon, ISFLAG_KNOW_PLUSES)
+           || weapon.plus < MAX_WPN_ENCHANT);
 }
 
 //
@@ -1979,8 +2042,8 @@ skill_type staff_skill(stave_type s)
         return SK_EARTH_MAGIC;
     case STAFF_FIRE:
         return SK_FIRE_MAGIC;
-    case STAFF_POISON:
-        return SK_POISON_MAGIC;
+    case STAFF_ALCHEMY:
+        return SK_ALCHEMY;
     case STAFF_DEATH:
         return SK_NECROMANCY;
     case STAFF_CONJURATION:
@@ -2000,9 +2063,11 @@ bool item_skills(const item_def &item, set<skill_type> &skills)
     }
 
     // Jewellery with evokable abilities, wands and similar unwielded
-    // evokers allow training.
+    // evokers allow training. (Talismans don't use evo.)
     // XX why are gives_ability cases broken up like this
-    if (item_is_evokable(item)
+    if (item.base_type == OBJ_TALISMANS)
+        skills.insert(SK_SHAPESHIFTING);
+    else if (item_ever_evokable(item) && !item.is_type(OBJ_MISCELLANY, MISC_ZIGGURAT)
         || item.base_type == OBJ_JEWELLERY && gives_ability(item)
         || staff_uses_evocations(item)
         || item.base_type == OBJ_WEAPONS && gives_ability(item))
@@ -2020,6 +2085,7 @@ bool item_skills(const item_def &item, set<skill_type> &skills)
         if (gives_ability(item))
             skills.insert(SK_EVOCATIONS);
     }
+
 
     // Weapons and staves allow training as long as your species can wield them.
     if (!you.could_wield(item, true, true))
@@ -2081,7 +2147,7 @@ bool is_crossbow(const item_def &item)
         return false;
     switch (item.sub_type)
     {
-    case WPN_HAND_CROSSBOW:
+    case WPN_HAND_CANNON:
     case WPN_ARBALEST:
     case WPN_TRIPLE_CROSSBOW:
         return true;
@@ -2195,6 +2261,37 @@ int ammo_type_damage(int missile_type)
     return Missile_prop[ Missile_index[missile_type] ].dam;
 }
 
+branch_type branch_for_gem(gem_type gem)
+{
+    return Gem_prop[ Gem_index[gem]].branch;
+}
+
+gem_type gem_for_branch(branch_type br)
+{
+    // XXX TODO: maybe bake a map in advance
+    for (int i = 0; i < NUM_GEM_TYPES; i++)
+    {
+        if (!item_type_removed(OBJ_GEMS, i)
+            && Gem_prop[ Gem_index[i]].branch == br)
+        {
+            return static_cast<gem_type>(i);
+        }
+    }
+    return NUM_GEM_TYPES;
+}
+
+const char* gem_adj(gem_type gem)
+{
+    return Gem_prop[ Gem_index[gem]].adj;
+}
+
+int gem_time_limit(gem_type gem)
+{
+    const int per_floor = Gem_prop[ Gem_index[gem]].time_per_floor;
+    const branch_type br = Gem_prop[ Gem_index[gem]].branch;
+    const int floors = branches[br].numlevels;
+    return per_floor * floors;
+}
 
 //
 // Reaching functions:
@@ -2224,6 +2321,20 @@ bool item_is_unique_rune(const item_def &item)
 bool item_is_orb(const item_def &item)
 {
     return item.is_type(OBJ_ORBS, ORB_ZOT);
+}
+
+/// Is this item a unique collectible which doesn't take inventory space?
+bool item_is_collectible(const item_def &item)
+{
+    switch (item.base_type)
+    {
+    case OBJ_RUNES:
+    case OBJ_GEMS:
+    case OBJ_ORBS:
+        return true;
+    default:
+        return false;
+    }
 }
 
 bool item_is_horn_of_geryon(const item_def &item)
@@ -2311,7 +2422,7 @@ bool ring_has_stackable_effect(const item_def &item)
 static map<potion_type, item_rarity_type> _potion_rarity = {
     { POT_CURING,       RARITY_VERY_COMMON },
     { POT_HEAL_WOUNDS,  RARITY_COMMON },
-    { POT_FLIGHT,       RARITY_UNCOMMON },
+    { POT_ENLIGHTENMENT,       RARITY_UNCOMMON },
     { POT_HASTE,        RARITY_UNCOMMON },
     { POT_LIGNIFY,      RARITY_UNCOMMON },
     { POT_ATTRACTION,   RARITY_UNCOMMON },
@@ -2335,7 +2446,7 @@ static map<scroll_type, item_rarity_type> _scroll_rarity = {
     { SCR_NOISE,          RARITY_UNCOMMON },
     { SCR_ENCHANT_ARMOUR, RARITY_UNCOMMON },
     { SCR_ENCHANT_WEAPON, RARITY_UNCOMMON },
-    { SCR_MAGIC_MAPPING,  RARITY_UNCOMMON },
+    { SCR_REVELATION,     RARITY_UNCOMMON },
     { SCR_FEAR,           RARITY_UNCOMMON },
     { SCR_FOG,            RARITY_UNCOMMON },
     { SCR_BLINKING,       RARITY_UNCOMMON },
@@ -2827,7 +2938,7 @@ bool gives_resistance(const item_def &item)
     case OBJ_STAVES:
         if (item.sub_type == STAFF_FIRE
             || item.sub_type == STAFF_COLD
-            || item.sub_type == STAFF_POISON
+            || item.sub_type == STAFF_ALCHEMY
             || item.sub_type == STAFF_AIR
             || item.sub_type == STAFF_DEATH)
         {
@@ -2880,7 +2991,7 @@ bool item_is_jelly_edible(const item_def &item)
         return false;
 
     // Don't eat special game items.
-    if (item_is_orb(item) || item.base_type == OBJ_RUNES)
+    if (item_is_collectible(item))
         return false;
 
     return true;
@@ -2948,9 +3059,40 @@ bool shield_reflects(const item_def &shield)
     return is_shield(shield) && get_armour_ego_type(shield) == SPARM_REFLECTION;
 }
 
+int shield_block_limit(const item_def &shield)
+{
+    if (!is_shield(shield))
+        return 0;
+    switch (shield.sub_type)
+    {
+    case ARM_BUCKLER:      return 2;
+    case ARM_KITE_SHIELD:  return 3;
+    case ARM_TOWER_SHIELD: return 4;
+    default:               return 0; // ?!
+    }
+}
+
 int guile_adjust_willpower(int wl)
 {
     return max(0, wl - 2 * WL_PIP);
+}
+
+string talisman_type_name(int type)
+{
+    switch (type)
+    {
+    case TALISMAN_BEAST:    return "beast talisman";
+    case TALISMAN_FLUX:     return "flux talisman";
+    case TALISMAN_MAW:      return "maw talisman";
+    case TALISMAN_SERPENT:  return "serpent talisman";
+    case TALISMAN_BLADE:    return "blade talisman";
+    case TALISMAN_STATUE:   return "granite talisman";
+    case TALISMAN_DRAGON:   return "dragon-blood talisman";
+    case TALISMAN_DEATH:    return "talisman of death";
+    case TALISMAN_STORM:    return "storm talisman";
+    default:
+        return "buggy talisman";
+    }
 }
 
 string item_base_name(const item_def &item)
@@ -2972,6 +3114,8 @@ string item_base_name(object_class_type type, int sub_type)
         return Armour_prop[Armour_index[sub_type]].name;
     case OBJ_JEWELLERY:
         return jewellery_is_amulet(sub_type) ? "amulet" : "ring";
+    case OBJ_TALISMANS:
+        return talisman_type_name(sub_type);
     default:
         return "";
     }
@@ -3121,6 +3265,27 @@ void expend_xp_evoker(int evoker_type)
     evoker_debt(evoker_type) += evoker_charge_xp_debt(evoker_type);
 }
 
+static string _xp_evoker_recharge_msg(const item_def &evoker, int gained, bool silenced)
+{
+    const evoker_data* edata = map_find(xp_evoker_data,
+                                        static_cast<misc_item_type>(evoker.sub_type));
+    ASSERT(edata);
+    const string msg = silenced ? edata->recharge_msg.silent : edata->recharge_msg.noisy;
+    if (!msg.empty())
+        return msg;
+    if (edata->max_charges == 1)
+        return "%s has recharged.";
+    return make_stringf("%%s has regained %s charge%s.",
+                        number_in_words(gained).c_str(),
+                        gained > 1 ? "s" : "");
+}
+
+void print_xp_evoker_recharge(const item_def &evoker, int gained, bool silenced)
+{
+    mprf(_xp_evoker_recharge_msg(evoker, gained, silenced).c_str(),
+         evoker.name(DESC_YOUR).c_str());
+}
+
 /// witchcraft. copied from mon-util.h's get_resist
 static inline int _get_armour_flag(armflags_t all, armour_flag res)
 {
@@ -3209,13 +3374,13 @@ static int &_item_set_choice(item_set_type typ)
 /// Some items are guaranteed to only generate in some games, and are
 /// mutually exclusive with other items within their set. Determine which
 /// will be generated in this game.
-void initialise_item_sets()
+void initialise_item_sets(bool reset)
 {
     for (int i = 0; i < NUM_ITEM_SET_TYPES; ++i)
     {
         const item_set_type iset = (item_set_type)i;
 #if TAG_MAJOR_VERSION == 34
-        if (you.props.exists(_item_set_key(iset)))
+        if (!reset && you.props.exists(_item_set_key(iset)))
             continue;
 #endif
         const vector<int> &subtypes = item_sets[i].subtypes;
@@ -3335,4 +3500,20 @@ string item_name_for_set(item_set_type typ)
     it.base_type = item_sets[typ].cls;
     it.sub_type = item_for_set(typ);
     return sub_type_string(it, true);
+}
+
+// Whether drinking this potion will cause a drunken swing
+bool oni_likes_potion(potion_type type)
+{
+    switch (type)
+    {
+        case POT_CURING:
+        case POT_HEAL_WOUNDS:
+        case POT_MAGIC:
+        case POT_AMBROSIA:
+            return true;
+
+        default:
+            return false;
+    }
 }

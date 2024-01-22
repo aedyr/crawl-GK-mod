@@ -27,11 +27,11 @@ of more ordinary instruments of chaos.
 glaive of Prune
 
 The glaive of Prune carries a terrible and insidious curse. Unless its wielder
-maintains firm self-control, they are doomed to succumb, undergoing a horrifying
-(albeit temporary) transformation. This is normally trivial to resist, but
-incapacitated wielders are certain to succumb, finding themselves nightmarishly
-purple, squishy, and delicious. They can take comfort in learning that it's
-surprisingly hard to injure a giant prune.
+maintains firm self-control, they are doomed to undergo a horrifying (albeit
+temporary) transformation. This is normally trivial to resist, but incapacitated
+wielders are certain to succumb, finding themselves nightmarishly purple, squishy,
+and delicious. They can take comfort in learning that it's surprisingly hard to
+injure a giant prune.
 %%%%
 sword of Power
 
@@ -40,14 +40,14 @@ weakness.
 %%%%
 staff of Olgreb
 
-A staff which was once wielded by the mighty wizard Olgreb.
+A staff which was once wielded by the great alchemist Olgreb.
 %%%%
 crystal ball of Wucad Mu
 
 A perfect sphere of crystal, overflowing with magical energies.
 {{
     if you.race() == "Djinni" then
-        return "It is utterly useless to Djinni."
+        return "It is utterly useless to Djinn."
     end
 }}
 %%%%
@@ -180,7 +180,8 @@ both the wielder and all of their followers.
 arbalest "Damnation"
 
 An unholy crossbow, forged in the fires of Gehenna. It imbues the bolts it
-fires with the raw power of its namesake.
+fires with the raw power of its namesake. Thankfully, the blasts this weapon
+produces never harm the one firing.
 %%%%
 # TAG_MINOR_VERSION == 34
 sword of the Doom Knight
@@ -554,7 +555,9 @@ powers of regeneration and magical protection, however, are hard to dispute.
 %%%%
 macabre finger necklace
 
-An ugly dangling finger on a string. It would look better with a ring on it.
+An ugly dangling finger on a string. Everything about it reeks of malign
+influences... but it's hard to avoid thinking that it would look better with a
+ring on it.
 %%%%
 # TAG_MAJOR_VERSION == 34
 boots of the spider
@@ -700,6 +703,10 @@ later misused and mangled by the lunatic murderer-mages of the Fifth Circle.
 Their influence leaves the wearer utterly unable to cast spells - the wearer's
 magic is redirected to far bloodier purposes.
 %%%%
+dreamdust necklace
+
+A dull dusty mixture trapped within a cracked crystal on a thin silver chain.
+%%%%
 dreamshard necklace
 
 A beautiful rainbow of colour and motion trapped within a delicate crystal on a
@@ -791,3 +798,9 @@ A disc of crackling metal, created by a woman whose cunning artifice and
 crafty politics once united a continent. Most of her surviving inventions are
 closely guarded by various royals, ostensible proof of their claim to be her
 true successor, but this early prototype slipped through their fingers.
+%%%%
+hand cannon "Mule"
+
+Hand cannons use magical dust to launch projectiles. The alchemists who craft
+them boast of their potency, but omit the smoke and noise blasted out with each
+shot. Filled with powdered blastmotes, Mule packs an especially powerful kick.
